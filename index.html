@@ -23,16 +23,13 @@
         input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px; }
         input[type="number"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 80px; }
         
-        /* 表格內編輯用的 input */
-        input.edit-input { padding: 6px; border: 1px solid #3498db; border-radius: 4px; width: 150px; font-size: 14px; background-color: #f4fdfb;}
-        
         button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; color: white; font-weight: bold; transition: 0.2s; }
         .btn-borrow { background-color: #3498db; } .btn-borrow:hover { background-color: #2980b9; }
         .btn-return { background-color: #e74c3c; } .btn-return:hover { background-color: #c0392b; }
         .btn-add { background-color: #27ae60; } .btn-add:hover { background-color: #2ecc71; }
         .btn-delete { background-color: #e74c3c; padding: 6px 10px; font-size: 13px; margin: 0; } .btn-delete:hover { background-color: #c0392b; }
         .btn-setting { background-color: #8e44ad; padding: 10px 15px; font-size: 14px; margin: 0; } .btn-setting:hover { background-color: #732d91; }
-        .btn-save-edit { background-color: #2980b9; padding: 6px 10px; font-size: 13px; margin: 0; margin-right: 5px;} .btn-save-edit:hover { background-color: #1f618d; }
+        .btn-edit-act { background-color: #f39c12; padding: 10px 20px; margin-left: 10px; } .btn-edit-act:hover { background-color: #d68910; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
@@ -59,7 +56,7 @@
 
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-front')">🔄 快速作業</button>
-        <button class="tab-btn" onclick="switchTab('tab-inventory')">📋 庫存總表與編輯</button>
+        <button class="tab-btn" onclick="switchTab('tab-inventory')">📋 庫存總表</button>
         <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ 系統設定</button>
     </div>
 
@@ -69,7 +66,7 @@
         
         <div class="form-group">
             <label for="userId">人員編號：</label>
-            <input type="text" id="userId" placeholder="請刷入或輸入人員編號">
+            <input type="text" id="userId" placeholder="請刷入或輸入人員編號 (例如: 1)">
         </div>
         <div class="form-group">
             <label for="itemId">物品條碼：</label>
@@ -115,14 +112,13 @@
             <tbody id="inventorySummary"></tbody>
         </table>
 
-        <h3 style="margin-top: 30px; font-size: 18px;">📋 物品庫存明細 (可直接修改條碼與名稱)</h3>
-        <div id="editFeedback" class="feedback" style="margin-bottom: 10px;"></div>
+        <h3 style="margin-top: 30px; font-size: 18px;">📋 物品庫存明細</h3>
         <div class="scroll-container">
             <table>
                 <thead>
                     <tr>
-                        <th>物品條碼 (可編輯)</th>
-                        <th>物品名稱 (可編輯)</th>
+                        <th>物品條碼</th>
+                        <th>物品名稱</th>
                         <th>目前狀態</th>
                         <th>借用人資訊</th>
                         <th>操作管理</th>
@@ -150,32 +146,57 @@
         <div class="grid-2">
             <div class="card">
                 <h2>👥 人員自動註冊</h2>
-                <div class="form-group"><label style="width: 80px;">人員編號:</label><span class="auto-gen-text">由系統自動產生</span></div>
-                <div class="form-group"><label style="width: 80px;">人員姓名:</label><input type="text" id="newUserName" placeholder="例如: 陳經理"></div>
+                <div class="form-group">
+                    <label style="width: 80px;">人員編號:</label>
+                    <span class="auto-gen-text">系統依序自動產生 (從 1 開始)</span>
+                </div>
+                <div class="form-group">
+                    <label style="width: 80px;">人員姓名:</label>
+                    <input type="text" id="newUserName" placeholder="例如: 陳經理">
+                </div>
                 <button class="btn-add" onclick="uiAddUser()">➕ 新增人員</button>
                 <div id="userFeedback" class="feedback"></div>
 
-                <h3>📜 人員清單</h3>
+                <h3 style="margin-top: 20px; font-size: 16px;">📜 人員清單</h3>
                 <div class="scroll-container" style="max-height: 250px;">
                     <table><thead><tr><th>人員編號</th><th>姓名</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
                 </div>
             </div>
 
             <div class="card">
-                <h2>📦 物品批次入庫系統</h2>
-                <div class="form-group"><label style="width: 80px;">物品條碼:</label><input type="text" id="newItemId" placeholder="例如: B005 (首碼)"></div>
-                <div class="form-group"><label style="width: 80px;">物品品名:</label><input type="text" id="newItemName" placeholder="例如: 筆記型電腦"></div>
+                <h2>📦 物品管理 (入庫 / 修改)</h2>
+                <div class="form-group">
+                    <label style="width: 80px;">舊條碼:</label>
+                    <input type="text" id="oldItemId" placeholder="修改專用：請輸入要修改的原條碼">
+                </div>
+                <div class="form-group">
+                    <label style="width: 80px;">新條碼:</label>
+                    <input type="text" id="newItemId" placeholder="新增或修改：請輸入新條碼">
+                </div>
+                <div class="form-group">
+                    <label style="width: 80px;">物品名稱:</label>
+                    <input type="text" id="newItemName" placeholder="例如: 筆記型電腦">
+                </div>
                 <div class="form-group">
                     <label style="width: 80px;">入庫數量:</label>
                     <input type="number" id="newItemQty" value="1" min="1" style="width: 60px;">
-                    <span class="auto-gen-text" style="margin-left: 10px;">(若 >1，系統會自動加上序號，如 B005-1)</span>
+                    <span class="auto-gen-text" style="margin-left: 10px;">(僅限新增時生效)</span>
                 </div>
-                <button class="btn-add" onclick="uiAddItem()">➕ 批次入庫</button>
-                <div id="itemFeedback" class="feedback"></div>
                 
-                <h3 style="margin-top: 30px; border-left-color: #f39c12;">⚠️ 新增安全庫存警示</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-add" onclick="uiAddItem()">➕ 批次入庫 (新物品)</button>
+                    <button class="btn-edit-act" onclick="uiEditItem()">✏️ 儲存修改 (覆蓋舊物品)</button>
+                </div>
+                <div id="itemFeedback" class="feedback"></div>
+                <p style="color: #7f8c8d; font-size: 12px; margin-top: 10px;">
+                    💡 提示：若要修改物品條碼或名稱，請在「舊條碼」輸入原條碼，並在下方輸入新的條碼與名稱後點擊「✏️ 儲存修改」。
+                </p>
+                
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+                <h3 style="border-left-color: #f39c12;">⚠️ 新增安全庫存警示</h3>
                 <div class="form-group"><label style="width: 80px;">警示品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
-                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px; background-color: #f39c12;" onclick="uiSetAlert()">新增 / 修改警示</button></div>
+                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px; background-color: #f39c12;" onclick="uiSetAlert()">新增 / 修改</button></div>
                 <div id="alertFeedback" class="feedback"></div>
 
                 <h3>📜 目前安全警示設定清單</h3>
@@ -237,7 +258,6 @@
 
                 if (this.items.size === 0 && this.users.size === 0) {
                     this.registerItem({id: "B001", name: "筆記型電腦", isBorrowed: false, borrowerId: null, borrowDate: null}, false);
-                    this.registerItem({id: "B002", name: "無線投影機", isBorrowed: false, borrowerId: null, borrowDate: null}, false);
                     this.addUser("張管理員", false); 
                     this.alerts.set("筆記型電腦", 1);
                     this.saveData();
@@ -290,8 +310,10 @@
             }
 
             addUser(name, doSave = true) {
+                // 將人員編號改為從 1 開始的純數字
                 const nextNumber = this.users.size + 1;
-                const newId = 'U' + String(nextNumber).padStart(4, '0'); 
+                const newId = String(nextNumber); 
+                
                 this.users.set(newId, { id: newId, name: name });
                 this.sendToCloud({ type: "user_add", userId: newId, userName: name });
                 if(doSave) this.saveData();
@@ -304,7 +326,8 @@
                 const idMapping = {}; 
 
                 oldUsers.forEach((user, index) => {
-                    const newId = 'U' + String(index + 1).padStart(4, '0');
+                    // 自動遞補也是純數字
+                    const newId = String(index + 1);
                     idMapping[user.id] = newId; 
                     user.id = newId;            
                     this.users.set(newId, user); 
@@ -338,10 +361,10 @@
                 if(doSave) this.saveData();
             }
 
-            // 修改物品條碼與名稱的核心邏輯
+            // 從後台直接修改物品的邏輯
             editItem(oldId, newId, newName) {
                 const item = this.items.get(oldId);
-                if (!item) return { success: false, msg: `❌ 找不到該物品。` };
+                if (!item) return { success: false, msg: `❌ 找不到舊條碼 [${oldId}] 的物品。` };
                 if (oldId !== newId && this.items.has(newId)) {
                     return { success: false, msg: `❌ 修改失敗：新的條碼 [${newId}] 已經存在，不可重複！` };
                 }
@@ -471,18 +494,17 @@
             const name = document.getElementById('newUserName').value.trim();
             if(!name) return showFeedback('userFeedback', '❌ 請輸入人員姓名', false);
             const newId = system.addUser(name);
-            showFeedback('userFeedback', `✅ 成功註冊人員：${name}`, true);
+            showFeedback('userFeedback', `✅ 成功註冊人員：${name} (編號: ${newId})`, true);
             document.getElementById('newUserName').value = '';
         }
 
         function uiDeleteUser(userId) {
-            if(!confirm(`⚠️ 確定要刪除人員【${userId}】嗎？`)) return;
+            if(!confirm(`⚠️ 確定要刪除人員【${userId}】嗎？\n(刪除後，後方編號將自動遞補，歷史紀錄也會連動更新！)`)) return;
             const result = system.deleteUser(userId);
             alert(result.msg);
             updateAllUI();
         }
 
-        // 修改：支援填寫數量批次新增
         function uiAddItem() {
             const baseId = document.getElementById('newItemId').value.trim();
             const name = document.getElementById('newItemName').value.trim();
@@ -492,11 +514,9 @@
             
             let successCount = 0;
             for (let i = 0; i < qty; i++) {
-                // 如果數量 > 1，自動補上 -1, -2 的後綴
                 const id = qty > 1 ? `${baseId}-${i + 1}` : baseId;
                 
                 if (system.items.has(id)) {
-                    // 如果遇到重複條碼，直接略過，但繼續執行下一個
                     console.warn(`條碼 ${id} 已存在，跳過新增。`);
                     continue; 
                 }
@@ -505,7 +525,7 @@
                 successCount++;
             }
             
-            system.saveData(); // 批次跑完存一次就好
+            system.saveData(); 
             
             if (successCount === qty) {
                 showFeedback('itemFeedback', `✅ 成功入庫 ${qty} 項物品！`, true);
@@ -513,9 +533,28 @@
                 showFeedback('itemFeedback', `⚠️ 成功入庫 ${successCount} 項物品 (${qty - successCount} 項因條碼重複跳過)`, false);
             }
             
+            // 清空輸入框
             document.getElementById('newItemId').value = '';
             document.getElementById('newItemName').value = '';
             document.getElementById('newItemQty').value = '1';
+        }
+
+        // 修改物品 (從後台介面觸發)
+        function uiEditItem() {
+            const oldId = document.getElementById('oldItemId').value.trim();
+            const newId = document.getElementById('newItemId').value.trim();
+            const newName = document.getElementById('newItemName').value.trim();
+
+            if(!oldId || !newId || !newName) return showFeedback('itemFeedback', '❌ 修改失敗：請填寫完整舊條碼、新條碼與物品名稱', false);
+            
+            const result = system.editItem(oldId, newId, newName);
+            showFeedback('itemFeedback', result.msg, result.success);
+            
+            if (result.success) {
+                document.getElementById('oldItemId').value = '';
+                document.getElementById('newItemId').value = '';
+                document.getElementById('newItemName').value = '';
+            }
         }
 
         function uiDeleteItem(itemId) {
@@ -523,22 +562,6 @@
             const result = system.deleteItem(itemId);
             alert(result.msg);
             updateAllUI();
-        }
-
-        // 呼叫編輯物品的邏輯
-        function uiEditItem(oldId) {
-            // 抓取對應輸入框內的值
-            const newId = document.getElementById(`edit-id-${oldId}`).value.trim();
-            const newName = document.getElementById(`edit-name-${oldId}`).value.trim();
-
-            if(!newId || !newName) return showFeedback('editFeedback', '❌ 修改失敗：條碼與名稱不可空白', false);
-            
-            const result = system.editItem(oldId, newId, newName);
-            showFeedback('editFeedback', result.msg, result.success);
-            if (!result.success) {
-                // 如果失敗(例如重複)，重置 UI
-                updateAllUI(); 
-            }
         }
 
         function uiSetAlert() {
@@ -590,17 +613,19 @@
         function updateRecentActionsUI() {
             const list = document.getElementById('recentActionsList');
             list.innerHTML = '';
+            
             if (system.history.length === 0) {
                 list.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">目前無動態紀錄</td></tr>`;
                 return;
             }
+            
             system.history.slice(0, 15).forEach(log => {
                 const actionTag = log.action === '借出' ? `<span class="tag-borrow">📤 借出</span>` : `<span class="tag-return">📥 歸還</span>`;
                 list.innerHTML += `<tr><td>${actionTag}</td><td style="color: #555;">${log.time}</td><td><strong>${log.itemId}</strong></td><td>${log.itemName}</td><td>${log.userId}</td><td>${log.userName}</td></tr>`;
             });
         }
 
-        // 更新庫存清單，將文字改為可輸入的 <input> 標籤
+        // 庫存清單 (移除直接編輯功能，改為純顯示)
         function updateInventoryUI() {
             const list = document.getElementById('inventoryList');
             const summaryList = document.getElementById('inventorySummary');
@@ -610,30 +635,22 @@
             system.items.forEach(item => {
                 let statusText = `<span class="status-available">🟢 可借用</span>`;
                 let borrowerText = `-`;
-                // 如果已經借出，就鎖定輸入框不可編輯，避免改錯
-                let inputDisabled = "";
                 
                 if(item.isBorrowed) {
                     statusText = `<span class="status-borrowed">🔴 已借出</span>`;
                     const user = system.users.get(item.borrowerId);
                     borrowerText = user ? `${user.name} (${user.id})` : item.borrowerId;
-                    inputDisabled = "disabled"; // 借出中不可改條碼
                 }
                 
-                const saveBtn = `<button class="btn-save-edit" ${inputDisabled} onclick="uiEditItem('${item.id}')">💾</button>`;
                 const deleteBtn = `<button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button>`;
                 
-                // 將純文字改為 input 元素
-                const idInput = `<input type="text" class="edit-input" style="width: 100px; font-weight: bold;" id="edit-id-${item.id}" value="${item.id}" ${inputDisabled}>`;
-                const nameInput = `<input type="text" class="edit-input" id="edit-name-${item.id}" value="${item.name}" ${inputDisabled}>`;
-
                 list.innerHTML += `
                     <tr>
-                        <td>${idInput}</td>
-                        <td>${nameInput}</td>
+                        <td><strong>${item.id}</strong></td>
+                        <td>${item.name}</td>
                         <td>${statusText}</td>
                         <td>${borrowerText}</td>
-                        <td>${saveBtn}${deleteBtn}</td>
+                        <td>${deleteBtn}</td>
                     </tr>
                 `;
                 
@@ -642,7 +659,6 @@
                 if (item.isBorrowed) summaryData[item.name].borrowed += 1;
             });
 
-            // 總表邏輯不變
             for (const [name, data] of Object.entries(summaryData)) {
                 const available = data.total - data.borrowed;
                 const alertStatus = system.checkAlertStatus(name);
