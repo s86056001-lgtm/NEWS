@@ -17,7 +17,7 @@
         .tab-content.active { display: block; }
 
         h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
-        h3 { color: #34495e; margin-top: 20px; border-left: 4px solid #3498db; padding-left: 10px; }
+        h3 { color: #34495e; margin-top: 20px; border-left: 4px solid #3498db; padding-left: 10px; font-size: 16px;}
         .form-group { margin-bottom: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;}
         label { width: 100px; font-weight: bold; }
         input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px; }
@@ -77,7 +77,7 @@
         </div>
         <div id="actionFeedback" class="feedback" style="margin-left: 110px;"></div>
 
-        <h3 style="margin-top: 40px;">⚠️ 最近 15 筆動態 (資料已自動同步至雲端)</h3>
+        <h3 style="margin-top: 40px; font-size: 18px;">⚠️ 最近 15 筆動態 (資料已自動同步至雲端)</h3>
         <div class="scroll-container">
             <table>
                 <thead>
@@ -111,7 +111,7 @@
             <tbody id="inventorySummary"></tbody>
         </table>
 
-        <h3 style="margin-top: 30px;">📋 各別物品庫存明細與管理</h3>
+        <h3 style="margin-top: 30px; font-size: 18px;">📋 各別物品庫存明細與管理</h3>
         <div class="scroll-container">
             <table>
                 <thead>
@@ -133,7 +133,7 @@
             <h2>☁️ 核心設定：連接 Google Sheets 資料庫</h2>
             <div class="form-group" style="margin-bottom: 0;">
                 <label style="width: 140px;">Web App 網址:</label>
-                <input type="password" id="sheetUrl" placeholder="https://script.google.com/macros/s/AKfycbwoVf7MqFNY2R-n75iM-RJwe0p2U34WHtJlArbpkINvIuNDBiG7sxC0SpzNBF6FiN61fQ/exec" style="width: 500px;">
+                <input type="password" id="sheetUrl" placeholder="請貼上 Apps Script 網址啟動自動同步" style="width: 500px;">
                 <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存並啟用</button>
             </div>
             <p style="color: #16a085; font-size: 13px; margin-top: 10px; margin-left: 150px;">
@@ -150,23 +150,31 @@
                 <button class="btn-add" onclick="uiAddUser()">➕ 新增人員</button>
                 <div id="userFeedback" class="feedback"></div>
 
-                <h3 style="margin-top: 20px; font-size: 16px;">📜 人員清單</h3>
+                <h3>📜 人員清單</h3>
                 <div class="scroll-container" style="max-height: 250px;">
                     <table><thead><tr><th>人員編號</th><th>姓名</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
                 </div>
             </div>
 
             <div class="card">
-                <h2>📦 物品入庫</h2>
+                <h2>📦 物品入庫與安全警示設定</h2>
                 <div class="form-group"><label style="width: 80px;">物品條碼:</label><input type="text" id="newItemId" placeholder="例如: B005"></div>
                 <div class="form-group"><label style="width: 80px;">物品品名:</label><input type="text" id="newItemName" placeholder="例如: 筆記型電腦"></div>
                 <button class="btn-add" onclick="uiAddItem()">➕ 物品入庫</button>
                 <div id="itemFeedback" class="feedback"></div>
                 
-                <h3 style="margin-top: 20px; font-size: 16px;">⚠️ 設定安全庫存警示值</h3>
-                <div class="form-group"><label style="width: 80px;">品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
-                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px;" onclick="uiSetAlert()">設定</button></div>
+                <h3 style="margin-top: 30px; border-left-color: #f39c12;">⚠️ 新增安全庫存警示</h3>
+                <div class="form-group"><label style="width: 80px;">警示品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
+                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px; background-color: #f39c12;" onclick="uiSetAlert()">新增 / 修改警示</button></div>
                 <div id="alertFeedback" class="feedback"></div>
+
+                <h3>📜 目前安全警示設定清單</h3>
+                <div class="scroll-container" style="max-height: 150px;">
+                    <table>
+                        <thead><tr><th>警示品名</th><th>警戒數量</th><th>操作</th></tr></thead>
+                        <tbody id="alertList"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -232,11 +240,8 @@
                 updateSyncStatusUI();
             }
 
-            // --- 核心：非同步發送資料到 Google Sheets ---
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
-                
-                // 使用 fetch 在背景傳送，不會卡住網頁
                 fetch(this.sheetUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -247,6 +252,15 @@
             setAlert(itemName, minQty) {
                 this.alerts.set(itemName, parseInt(minQty));
                 this.saveData();
+            }
+
+            deleteAlert(itemName) {
+                if (this.alerts.has(itemName)) {
+                    this.alerts.delete(itemName);
+                    this.saveData();
+                    return { success: true, msg: `✅ 已移除【${itemName}】的警示設定` };
+                }
+                return { success: false, msg: `❌ 找不到該設定` };
             }
 
             checkAlertStatus(itemName) {
@@ -269,10 +283,7 @@
                 const nextNumber = this.users.size + 1;
                 const newId = 'U' + String(nextNumber).padStart(4, '0'); 
                 this.users.set(newId, { id: newId, name: name });
-                
-                // 自動同步新增人員
                 this.sendToCloud({ type: "user_add", userId: newId, userName: name });
-                
                 if(doSave) this.saveData();
                 return newId;
             }
@@ -313,10 +324,7 @@
             registerItem(itemObj, doSave = true) {
                 if (itemObj.borrowDate === undefined) itemObj.borrowDate = null;
                 this.items.set(itemObj.id, itemObj);
-                
-                // 自動同步新增物品
                 this.sendToCloud({ type: "item_add", itemId: itemObj.id, itemName: itemObj.name });
-
                 if(doSave) this.saveData();
             }
 
@@ -332,11 +340,8 @@
             recordAction(action, userId, userName, itemId, itemName) {
                 const timeStr = getFormattedDate();
                 const logData = { type: "history", time: timeStr, action: action, userId: userId, userName: userName, itemId: itemId, itemName: itemName };
-                
                 this.history.unshift(logData);
                 this.saveData();
-                
-                // 自動同步借還紀錄
                 this.sendToCloud(logData);
             }
 
@@ -467,12 +472,21 @@
             system.setAlert(name, qty);
             showFeedback('alertFeedback', `✅ 成功設定【${name}】警戒值`, true);
             document.getElementById('alertItemName').value = '';
+            document.getElementById('alertMinQty').value = '1';
+        }
+
+        function uiDeleteAlert(itemName) {
+            if(!confirm(`⚠️ 確定要刪除【${itemName}】的安全警示設定嗎？`)) return;
+            const result = system.deleteAlert(itemName);
+            showFeedback('alertFeedback', result.msg, result.success);
+            updateAllUI();
         }
 
         function updateAllUI() {
             updateInventoryUI();
             updateUsersUI();
             updateRecentActionsUI();
+            updateAlertListUI();
             updateSyncStatusUI();
             if(system.sheetUrl) document.getElementById('sheetUrl').value = system.sheetUrl;
         }
@@ -484,28 +498,31 @@
                 list.innerHTML += `<tr><td><strong>${user.id}</strong></td><td>${user.name}</td><td><button class="btn-delete" onclick="uiDeleteUser('${user.id}')">刪除</button></td></tr>`;
             });
         }
+        
+        function updateAlertListUI() {
+            const list = document.getElementById('alertList');
+            list.innerHTML = '';
+            if (system.alerts.size === 0) {
+                list.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #7f8c8d;">目前無任何警示設定</td></tr>`;
+                return;
+            }
+            system.alerts.forEach((qty, name) => {
+                list.innerHTML += `<tr><td><strong>${name}</strong></td><td>${qty}</td><td><button class="btn-delete" onclick="uiDeleteAlert('${name}')">刪除</button></td></tr>`;
+            });
+        }
 
         function updateRecentActionsUI() {
             const list = document.getElementById('recentActionsList');
-            const historyList = document.getElementById('historyList'); // 本地備份區
             list.innerHTML = '';
-            if (historyList) historyList.innerHTML = '';
             
             if (system.history.length === 0) {
                 list.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">目前無動態紀錄</td></tr>`;
                 return;
             }
             
-            // 快速區顯示前 15 筆
             system.history.slice(0, 15).forEach(log => {
                 const actionTag = log.action === '借出' ? `<span class="tag-borrow">📤 借出</span>` : `<span class="tag-return">📥 歸還</span>`;
                 list.innerHTML += `<tr><td>${actionTag}</td><td style="color: #555;">${log.time}</td><td><strong>${log.itemId}</strong></td><td>${log.itemName}</td><td>${log.userId}</td><td>${log.userName}</td></tr>`;
-            });
-
-            // 本地備份區顯示全部
-            system.history.forEach(log => {
-                const actionColor = log.action === '借出' ? '#e74c3c' : '#27ae60';
-                if(historyList) historyList.innerHTML += `<tr><td>${log.time}</td><td style="color: ${actionColor}; font-weight: bold;">${log.action}</td><td>${log.userId}</td><td>${log.userName}</td><td>${log.itemId}</td><td>${log.itemName}</td></tr>`;
             });
         }
 
@@ -549,21 +566,8 @@
             }
         }
 
-        // 保留本地下載功能作為備案
-        function exportToExcel() {
-            if(system.history.length === 0) return alert("目前沒有紀錄可匯出！");
-            let csvContent = "\uFEFF操作時間,動作,人員編號,人員姓名,物品條碼,物品名稱\n";
-            system.history.forEach(row => {
-                csvContent += `${row.time},${row.action},${row.userId},${row.userName},${row.itemId},${row.itemName}\n`;
-            });
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `本地備份紀錄_${new Date().toISOString().split('T')[0]}.csv`;
-            link.click();
-        }
-
         updateAllUI();
     </script>
 </body>
 </html>
+幫我新增借出超過多少天發出警示燈號於後台紀錄內並在歸還時可以給予處罰規則例如禁止借出幾天等等之類的處罰規範可以自行決定
