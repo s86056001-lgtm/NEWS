@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>企業級自動借還與管理系統</title>
+    <title>智能雲端借還管理系統</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; color: #333; max-width: 1000px; margin: 0 auto; padding: 20px; }
         .header { text-align: center; color: #2c3e50; margin-bottom: 20px; }
@@ -28,7 +28,6 @@
         .btn-return { background-color: #e74c3c; } .btn-return:hover { background-color: #c0392b; }
         .btn-add { background-color: #27ae60; } .btn-add:hover { background-color: #2ecc71; }
         .btn-delete { background-color: #e74c3c; padding: 6px 12px; font-size: 13px; margin: 0; } .btn-delete:hover { background-color: #c0392b; }
-        .btn-export { background-color: #f39c12; float: right; margin-top: -50px;} .btn-export:hover { background-color: #d68910; }
         .btn-setting { background-color: #8e44ad; padding: 10px 15px; font-size: 14px; margin: 0; } .btn-setting:hover { background-color: #732d91; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -42,23 +41,28 @@
         
         .tag-borrow { background-color: #fdebd0; color: #d35400; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; border: 1px solid #f5b041;}
         .tag-return { background-color: #d5f5e3; color: #1e8449; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; border: 1px solid #58d68d;}
+        
+        #syncStatus { float: right; font-size: 14px; padding: 5px 10px; border-radius: 4px; margin-top: -45px; font-weight: bold;}
+        .sync-on { background-color: #d5f5e3; color: #1e8449; }
+        .sync-off { background-color: #fadbd8; color: #c0392b; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1>📦 企業級自動借還管理系統 (雲端同步版)</h1>
+        <h1>📦 智能雲端自動借還系統</h1>
     </div>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('tab-front')">🔄 前台借還作業</button>
-        <button class="tab-btn" onclick="switchTab('tab-inventory')">📋 庫存總表與清單</button>
-        <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ 後台管理系統</button>
-        <button class="tab-btn" onclick="switchTab('tab-history')">📝 歷史紀錄與匯出</button>
+        <button class="tab-btn active" onclick="switchTab('tab-front')">🔄 快速作業</button>
+        <button class="tab-btn" onclick="switchTab('tab-inventory')">📋 庫存總表</button>
+        <button class="tab-btn" onclick="switchTab('tab-admin')">⚙️ 系統設定</button>
     </div>
 
     <div id="tab-front" class="tab-content active">
         <h2>🔄 快速借還區</h2>
+        <div id="syncStatus" class="sync-off">☁️ 雲端未連線</div>
+        
         <div class="form-group">
             <label for="userId">人員編號：</label>
             <input type="text" id="userId" placeholder="請刷入或輸入人員編號">
@@ -73,7 +77,7 @@
         </div>
         <div id="actionFeedback" class="feedback" style="margin-left: 110px;"></div>
 
-        <h3 style="margin-top: 40px;">⚠️ 最近借還動態 (依時間排列)</h3>
+        <h3 style="margin-top: 40px;">⚠️ 最近 15 筆動態 (資料已自動同步至雲端)</h3>
         <div class="scroll-container">
             <table>
                 <thead>
@@ -126,52 +130,44 @@
 
     <div id="tab-admin" class="tab-content">
         <div class="card" style="margin-bottom: 20px; background: #e8f8f5; border-color: #a3e4d7;">
-            <h2>☁️ 雲端資料庫同步設定 (Google Sheets)</h2>
+            <h2>☁️ 核心設定：連接 Google Sheets 資料庫</h2>
             <div class="form-group" style="margin-bottom: 0;">
                 <label style="width: 140px;">Web App 網址:</label>
-                <input type="password" id="sheetUrl" placeholder="https://script.google.com/macros/s/AKfycbyVXuc0HLYV1LqR6q7PXPc4Xth8HxxEUO54WZyLeRjB0P3QQtwK0mD3BkBWsye177RFww/exec" style="width: 500px;">
-                <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存並連線</button>
+                <input type="password" id="sheetUrl" placeholder="請貼上 Apps Script 網址啟動自動同步" style="width: 500px;">
+                <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存並啟用</button>
             </div>
+            <p style="color: #16a085; font-size: 13px; margin-top: 10px; margin-left: 150px;">
+                啟動後，所有借還動作、新增人員與物品，將會在背景 100% 自動傳送至您的試算表。
+            </p>
             <div id="syncFeedback" class="feedback" style="margin-left: 150px;"></div>
         </div>
 
         <div class="grid-2">
             <div class="card">
-                <h2>👥 人員註冊系統</h2>
-                <div class="form-group"><label style="width: 80px;">人員編號:</label><span class="auto-gen-text">系統將依註冊順序自動產生 (如 U0001)</span></div>
-                <div class="form-group"><label style="width: 80px;">人員姓名:</label><input type="text" id="newUserName" placeholder="請輸入人員姓名 (如: 陳經理)"></div>
+                <h2>👥 人員自動註冊</h2>
+                <div class="form-group"><label style="width: 80px;">人員編號:</label><span class="auto-gen-text">由系統自動產生</span></div>
+                <div class="form-group"><label style="width: 80px;">人員姓名:</label><input type="text" id="newUserName" placeholder="例如: 陳經理"></div>
                 <button class="btn-add" onclick="uiAddUser()">➕ 新增人員</button>
                 <div id="userFeedback" class="feedback"></div>
 
-                <h3 style="margin-top: 20px; font-size: 16px;">📜 已註冊人員清單</h3>
+                <h3 style="margin-top: 20px; font-size: 16px;">📜 人員清單</h3>
                 <div class="scroll-container" style="max-height: 250px;">
                     <table><thead><tr><th>人員編號</th><th>姓名</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
                 </div>
             </div>
 
             <div class="card">
-                <h2>📦 物品入庫系統</h2>
+                <h2>📦 物品入庫</h2>
                 <div class="form-group"><label style="width: 80px;">物品條碼:</label><input type="text" id="newItemId" placeholder="例如: B005"></div>
                 <div class="form-group"><label style="width: 80px;">物品品名:</label><input type="text" id="newItemName" placeholder="例如: 筆記型電腦"></div>
-                <button class="btn-add" onclick="uiAddItem()">➕ 新增 / 更新物品</button>
+                <button class="btn-add" onclick="uiAddItem()">➕ 物品入庫</button>
                 <div id="itemFeedback" class="feedback"></div>
                 
                 <h3 style="margin-top: 20px; font-size: 16px;">⚠️ 設定安全庫存警示值</h3>
                 <div class="form-group"><label style="width: 80px;">品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
-                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px;" onclick="uiSetAlert()">設定警示</button></div>
+                <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px;" onclick="uiSetAlert()">設定</button></div>
                 <div id="alertFeedback" class="feedback"></div>
             </div>
-        </div>
-    </div>
-
-    <div id="tab-history" class="tab-content">
-        <h2>📝 系統操作紀錄</h2>
-        <button class="btn-export" onclick="exportToExcel()">📊 匯出 CSV (本地端備份)</button>
-        <div class="scroll-container" style="max-height: 400px;">
-            <table>
-                <thead><tr><th>時間</th><th>動作</th><th>人員編號</th><th>人員姓名</th><th>物品條碼</th><th>物品名稱</th></tr></thead>
-                <tbody id="historyList"></tbody>
-            </table>
         </div>
     </div>
 
@@ -233,6 +229,19 @@
             setSheetUrl(url) {
                 this.sheetUrl = url;
                 localStorage.setItem('sys_sheet_url', url);
+                updateSyncStatusUI();
+            }
+
+            // --- 核心：非同步發送資料到 Google Sheets ---
+            sendToCloud(dataPayload) {
+                if (!this.sheetUrl) return; 
+                
+                // 使用 fetch 在背景傳送，不會卡住網頁
+                fetch(this.sheetUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(dataPayload)
+                }).catch(err => console.error("雲端同步失敗", err));
             }
 
             setAlert(itemName, minQty) {
@@ -260,6 +269,10 @@
                 const nextNumber = this.users.size + 1;
                 const newId = 'U' + String(nextNumber).padStart(4, '0'); 
                 this.users.set(newId, { id: newId, name: name });
+                
+                // 自動同步新增人員
+                this.sendToCloud({ type: "user_add", userId: newId, userName: name });
+                
                 if(doSave) this.saveData();
                 return newId;
             }
@@ -300,6 +313,10 @@
             registerItem(itemObj, doSave = true) {
                 if (itemObj.borrowDate === undefined) itemObj.borrowDate = null;
                 this.items.set(itemObj.id, itemObj);
+                
+                // 自動同步新增物品
+                this.sendToCloud({ type: "item_add", itemId: itemObj.id, itemName: itemObj.name });
+
                 if(doSave) this.saveData();
             }
 
@@ -312,26 +329,15 @@
                 return { success: true, msg: `✅ 成功刪除庫存物品：${item.name} (${itemId})` };
             }
 
-            // 核心：紀錄動作並同步到 Google Sheets
             recordAction(action, userId, userName, itemId, itemName) {
                 const timeStr = getFormattedDate();
-                const logData = { time: timeStr, action: action, userId: userId, userName: userName, itemId: itemId, itemName: itemName };
+                const logData = { type: "history", time: timeStr, action: action, userId: userId, userName: userName, itemId: itemId, itemName: itemName };
                 
-                // 1. 存入本地端
                 this.history.unshift(logData);
                 this.saveData();
-
-                // 2. 若有設定網址，同步到雲端 (非同步背景執行，不影響畫面速度)
-                if (this.sheetUrl) {
-                    fetch(this.sheetUrl, {
-                        method: 'POST',
-                        // 使用 text/plain 避免跨網域 (CORS) 阻擋問題
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(logData)
-                    }).catch(error => {
-                        console.error('雲端同步失敗:', error);
-                    });
-                }
+                
+                // 自動同步借還紀錄
+                this.sendToCloud(logData);
             }
 
             borrowItem(userId, itemId) {
@@ -375,7 +381,6 @@
 
         const system = new BorrowingSystem();
 
-        // UI 綁定區域
         function showFeedback(elementId, message, isSuccess) {
             const el = document.getElementById(elementId);
             el.textContent = message;
@@ -383,11 +388,22 @@
             setTimeout(() => { el.textContent = ''; }, 5000);
         }
 
+        function updateSyncStatusUI() {
+            const statusEl = document.getElementById('syncStatus');
+            if (system.sheetUrl) {
+                statusEl.className = 'sync-on';
+                statusEl.textContent = '☁️ 雲端自動同步中';
+            } else {
+                statusEl.className = 'sync-off';
+                statusEl.textContent = '☁️ 雲端未連線';
+            }
+        }
+
         function uiSetSheetUrl() {
             const url = document.getElementById('sheetUrl').value.trim();
             if(!url) return showFeedback('syncFeedback', '❌ 請輸入有效的 Web App 網址', false);
             system.setSheetUrl(url);
-            showFeedback('syncFeedback', '✅ 雲端同步網址已儲存！日後借還動作將自動傳送至試算表。', true);
+            showFeedback('syncFeedback', '✅ 雲端同步已啟動！資料將在背景自動傳送。', true);
         }
 
         function uiBorrow() {
@@ -411,7 +427,7 @@
             const name = document.getElementById('newUserName').value.trim();
             if(!name) return showFeedback('userFeedback', '❌ 請輸入人員姓名', false);
             const newId = system.addUser(name);
-            showFeedback('userFeedback', `✅ 成功註冊人員：${name} (分配編號: ${newId})`, true);
+            showFeedback('userFeedback', `✅ 成功註冊人員：${name}`, true);
             document.getElementById('newUserName').value = '';
         }
 
@@ -449,18 +465,16 @@
             const qty = document.getElementById('alertMinQty').value;
             if(!name || qty === '') return showFeedback('alertFeedback', '❌ 請輸入完整資料', false);
             system.setAlert(name, qty);
-            showFeedback('alertFeedback', `✅ 成功設定【${name}】安全警戒值為 ${qty}`, true);
+            showFeedback('alertFeedback', `✅ 成功設定【${name}】警戒值`, true);
             document.getElementById('alertItemName').value = '';
         }
 
         function updateAllUI() {
             updateInventoryUI();
-            updateHistoryUI();
             updateUsersUI();
             updateRecentActionsUI();
-            if(system.sheetUrl) {
-                document.getElementById('sheetUrl').value = system.sheetUrl;
-            }
+            updateSyncStatusUI();
+            if(system.sheetUrl) document.getElementById('sheetUrl').value = system.sheetUrl;
         }
 
         function updateUsersUI() {
@@ -473,15 +487,25 @@
 
         function updateRecentActionsUI() {
             const list = document.getElementById('recentActionsList');
+            const historyList = document.getElementById('historyList'); // 本地備份區
             list.innerHTML = '';
-            const recentLogs = system.history.slice(0, 10);
-            if (recentLogs.length === 0) {
+            if (historyList) historyList.innerHTML = '';
+            
+            if (system.history.length === 0) {
                 list.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">目前無動態紀錄</td></tr>`;
                 return;
             }
-            recentLogs.forEach(log => {
+            
+            // 快速區顯示前 15 筆
+            system.history.slice(0, 15).forEach(log => {
                 const actionTag = log.action === '借出' ? `<span class="tag-borrow">📤 借出</span>` : `<span class="tag-return">📥 歸還</span>`;
                 list.innerHTML += `<tr><td>${actionTag}</td><td style="color: #555;">${log.time}</td><td><strong>${log.itemId}</strong></td><td>${log.itemName}</td><td>${log.userId}</td><td>${log.userName}</td></tr>`;
+            });
+
+            // 本地備份區顯示全部
+            system.history.forEach(log => {
+                const actionColor = log.action === '借出' ? '#e74c3c' : '#27ae60';
+                if(historyList) historyList.innerHTML += `<tr><td>${log.time}</td><td style="color: ${actionColor}; font-weight: bold;">${log.action}</td><td>${log.userId}</td><td>${log.userName}</td><td>${log.itemId}</td><td>${log.itemName}</td></tr>`;
             });
         }
 
@@ -525,15 +549,7 @@
             }
         }
 
-        function updateHistoryUI() {
-            const list = document.getElementById('historyList');
-            list.innerHTML = '';
-            system.history.forEach(log => {
-                const actionColor = log.action === '借出' ? '#e74c3c' : '#27ae60';
-                list.innerHTML += `<tr><td>${log.time}</td><td style="color: ${actionColor}; font-weight: bold;">${log.action}</td><td>${log.userId}</td><td>${log.userName}</td><td>${log.itemId}</td><td>${log.itemName}</td></tr>`;
-            });
-        }
-
+        // 保留本地下載功能作為備案
         function exportToExcel() {
             if(system.history.length === 0) return alert("目前沒有紀錄可匯出！");
             let csvContent = "\uFEFF操作時間,動作,人員編號,人員姓名,物品條碼,物品名稱\n";
@@ -543,7 +559,7 @@
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `借還系統紀錄_${new Date().toISOString().split('T')[0]}.csv`;
+            link.download = `本地備份紀錄_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
         }
 
