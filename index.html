@@ -11,9 +11,9 @@
         #screensaver {
             display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; 
             background-color: #000; flex-direction: column; justify-content: center; align-items: center; color: white;
-            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); /* 槽車事故示意圖 */
+            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop');
             background-size: cover; background-position: center; background-blend-mode: multiply; 
-            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); /* 讓文字清楚一點的暗化處理 */
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6);
             cursor: pointer;
         }
         #screensaver h1 { font-size: 5vw; margin: 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); letter-spacing: 2px; }
@@ -87,7 +87,7 @@
 <body>
 
     <div id="screensaver" onclick="wakeUp()">
-        <h1>⚠️ 工安宣導 ⚠️</h1>
+        <h1>⚠️ 隊長宣導 ⚠️</h1>
         <h2 style="color: #f39c12; font-size:3vw;">請隨時注意槽車作業安全，落實SOP</h2>
         <p>點擊螢幕任意處喚醒系統</p>
     </div>
@@ -314,7 +314,7 @@
             document.onkeypress = resetIdleTimer;
             document.onclick = resetIdleTimer;
             
-            // 確保啟動時 UI 是最新的
+            // 初始化確保 UI 載入
             updateAllUI();
             resetIdleTimer();
         };
@@ -345,7 +345,7 @@
             document.getElementById(tabId).style.display = 'block';
             document.getElementById('screenTitle').textContent = screenTitles[tabId];
             
-            // 延遲更新 UI，確保 DOM 已顯示，避免抓不到元素的錯誤
+            // 延遲更新 UI，確保 DOM 已顯示
             setTimeout(() => {
                 updateAllUI();
             }, 50);
@@ -441,6 +441,7 @@
                 
                 this.rules = JSON.parse(localStorage.getItem('sys_rules')) || { maxDays: 7, penaltyMult: 2 };
                 
+                // 密碼管理初始化
                 if (!localStorage.getItem('sys_admin_pwd')) {
                     localStorage.setItem('sys_admin_pwd', '217072');
                     localStorage.setItem('sys_pwd_date', new Date().getTime());
@@ -449,6 +450,7 @@
                 this.loadData();
             }
 
+            // 密碼相關方法
             getAdminPassword() { return localStorage.getItem('sys_admin_pwd') || '217072'; }
 
             updateAdminPassword(newPwd) {
@@ -469,7 +471,6 @@
                 localStorage.setItem('sys_history', JSON.stringify(this.history));
                 localStorage.setItem('sys_alerts', JSON.stringify(Array.from(this.alerts.entries())));
                 localStorage.setItem('sys_rules', JSON.stringify(this.rules));
-                updateAllUI();
             }
 
             loadData() {
@@ -531,17 +532,49 @@
 
             calculateOverdue(borrowDateStr) {
                 if (!borrowDateStr) return { isOverdue: false, daysOver: 0 };
+                
                 const borrowDate = new Date(borrowDateStr);
                 const now = new Date();
                 const diffTime = Math.abs(now - borrowDate);
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); 
-                if (diffDays > this.rules.maxDays) return { isOverdue: true, daysOver: diffDays - this.rules.maxDays };
+                
+                if (diffDays > this.rules.maxDays) {
+                    return { isOverdue: true, daysOver: diffDays - this.rules.maxDays };
+                }
                 return { isOverdue: false, daysOver: 0 };
+            }
+
+            // --- 自動剔除 6 個月未借用人員 ---
+            removeInactiveUsers() {
+                const now = new Date().getTime();
+                const sixMonthsMs = 180 * 24 * 60 * 60 * 1000;
+                let removedCount = 0;
+
+                this.users.forEach((user, userId) => {
+                    // 尋找該人員最後一次的借出紀錄
+                    let lastBorrowLog = this.history.find(log => log.userId === userId && log.action === "借出");
+                    
+                    if (lastBorrowLog) {
+                        const lastBorrowDate = new Date(lastBorrowLog.time).getTime();
+                        if (now - lastBorrowDate > sixMonthsMs) {
+                            this.users.delete(userId);
+                            removedCount++;
+                            this.sendToCloud({ type: "user_delete", userId: userId, userName: user.name });
+                        }
+                    } else {
+                        // 註冊後從未借過任何東西的，暫不處理或依需求處理，此處假設保留
+                    }
+                });
+
+                if(removedCount > 0) {
+                    this.reindexUsers(); // 重新編排號碼
+                }
             }
 
             addUser(name, doSave = true) {
                 const nextNumber = this.users.size + 1;
                 const newId = String(nextNumber); 
+                
                 this.users.set(newId, { id: newId, name: name, banUntil: null });
                 this.sendToCloud({ type: "user_add", userId: newId, userName: name });
                 if(doSave) this.saveData();
@@ -552,15 +585,21 @@
                 const oldUsers = Array.from(this.users.values());
                 this.users.clear(); 
                 const idMapping = {}; 
+
                 oldUsers.forEach((user, index) => {
                     const newId = String(index + 1);
                     idMapping[user.id] = newId; 
                     user.id = newId;            
                     this.users.set(newId, user); 
                 });
+
                 this.items.forEach(item => {
                     if (item.borrowerId && idMapping[item.borrowerId]) item.borrowerId = idMapping[item.borrowerId];
                 });
+                this.history.forEach(log => {
+                    if (idMapping[log.userId]) log.userId = idMapping[log.userId];
+                });
+
                 this.saveData();
             }
 
@@ -568,7 +607,9 @@
                 const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowerId === userId);
                 if (hasBorrowed) return { success: false, msg: `❌ 無法刪除：該人員目前仍有未歸還的物品！` };
                 if (this.users.has(userId)) {
+                    const user = this.users.get(userId);
                     this.users.delete(userId);
+                    this.sendToCloud({ type: "user_delete", userId: userId, userName: user.name });
                     this.reindexUsers(); 
                     return { success: true, msg: `✅ 成功刪除人員，所有編號已自動重新排列！` };
                 }
@@ -589,19 +630,22 @@
                     return { success: false, msg: `❌ 修改失敗：新的條碼 [${newId}] 已經存在，不可重複！` };
                 }
 
-                if(oldId !== newId || item.name !== newName) {
+                if (oldId !== newId || item.name !== newName) {
                     this.history.forEach(log => {
                         if (log.itemId === oldId) {
                             log.itemId = newId;
                             log.itemName = newName;
                         }
                     });
+                    this.sendToCloud({ type: "item_edit", oldItemId: oldId, newItemId: newId, newItemName: newName });
                 }
 
                 if (oldId !== newId) this.items.delete(oldId);
+                
                 item.id = newId;
                 item.name = newName;
                 this.items.set(newId, item);
+                
                 this.saveData();
                 return { success: true, msg: `✅ 物品已成功更新為 [${newId}] ${newName}` };
             }
@@ -611,6 +655,7 @@
                 if (!item) return { success: false, msg: `❌ 找不到該物品資料。` };
                 if (item.isBorrowed) return { success: false, msg: `❌ 無法刪除：該物品目前正在外借中，請先歸還！` };
                 this.items.delete(itemId);
+                this.sendToCloud({ type: "item_delete", itemId: itemId, itemName: item.name });
                 this.saveData();
                 return { success: true, msg: `✅ 成功刪除庫存物品：${item.name} (${itemId})` };
             }
@@ -627,12 +672,17 @@
                 const user = this.users.get(userId);
                 const item = this.items.get(itemId);
                 
-                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先註冊！` };
+                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先至後台註冊！` };
                 
+                // 檢查停權狀態
                 if (user.banUntil) {
                     const banDate = new Date(user.banUntil);
-                    if (new Date() < banDate) return { success: false, msg: `❌ 停權中！該人員因先前逾期未還，停權至 ${user.banUntil}。` };
-                    else user.banUntil = null; 
+                    const now = new Date();
+                    if (now < banDate) {
+                        return { success: false, msg: `❌ 停權中！該人員因先前逾期未還，停權至 ${user.banUntil}。禁止借出！` };
+                    } else {
+                        user.banUntil = null; // 停權結束，解除
+                    }
                 }
 
                 if (!item) return { success: false, msg: `❌ 找不到物品條碼: ${itemId}` };
@@ -640,7 +690,7 @@
 
                 const alertStatus = this.checkAlertStatus(item.name);
                 if (alertStatus.isAlert && alertStatus.available <= alertStatus.alertQty) {
-                     return { success: false, msg: `❌ 庫存警戒！【${item.name}】數量達安全值 (${alertStatus.alertQty})，禁止外借！` };
+                     return { success: false, msg: `❌ 庫存警戒！【${item.name}】可借用數量已達最低安全值 (${alertStatus.alertQty})，禁止外借！` };
                 }
 
                 item.isBorrowed = true;
@@ -660,15 +710,18 @@
                 const userName = user ? user.name : "未知人員";
                 const userId = user ? user.id : "未知編號";
 
+                // 計算是否逾期並執行處罰
                 const overdueStatus = this.calculateOverdue(item.borrowDate);
                 let extraMsg = "";
                 
                 if (overdueStatus.isOverdue && user && this.rules.penaltyMult > 0) {
                     const penaltyDays = overdueStatus.daysOver * this.rules.penaltyMult;
+                    
                     let banDate = new Date();
                     banDate.setDate(banDate.getDate() + penaltyDays);
-                    user.banUntil = banDate.toLocaleString('zh-TW'); 
-                    extraMsg = `\n⚠️ 【逾期處罰】逾期 ${overdueStatus.daysOver} 天，將停權借用至 ${user.banUntil}！`;
+                    
+                    user.banUntil = banDate.toLocaleString('zh-TW'); // 記錄解禁時間
+                    extraMsg = `\n⚠️ 【逾期處罰】逾期 ${overdueStatus.daysOver} 天，該人員將被停權借用至 ${user.banUntil}！`;
                 }
 
                 item.isBorrowed = false;
@@ -794,6 +847,7 @@
                 document.getElementById('newItemId').value = '';
                 document.getElementById('newItemName').value = '';
             }
+            updateAllUI();
         }
 
         function uiDeleteItem(itemId) {
@@ -824,7 +878,9 @@
 
         // === 更新畫面資料 ===
         function updateAllUI() {
-            // 由於分開呼叫，有些元素如果不存在 (因為 display:none 或還沒載入)，就不需要強制更新它的值
+            // 背景清理閒置人員
+            system.removeInactiveUsers();
+
             updateInventoryUI();
             updateUsersUI();
             updateActiveBorrowsUI(); 
