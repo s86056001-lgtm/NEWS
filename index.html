@@ -89,6 +89,7 @@
         .btn-add { background-color: var(--success); } .btn-add:hover { background-color: #219150; }
         .btn-delete { background-color: var(--danger); padding: 8px 15px; font-size: 14px; } .btn-delete:hover { background-color: #c0392b; }
         .btn-setting { background-color: #8e44ad; } .btn-setting:hover { background-color: #732d91; }
+        .btn-sync { background-color: #2980b9; } .btn-sync:hover { background-color: #1c5982; }
         .btn-edit-act { background-color: var(--warning); } .btn-edit-act:hover { background-color: #d68910; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 15px; text-align: center; }
@@ -165,7 +166,7 @@
             </div>
             <div id="actionFeedback" class="feedback"></div>
 
-            <h3>⚠️ 最近動態 (自動連線 GOOGLE 表單做同步更新)</h3>
+            <h3>⚠️ 最近動態 (資料雙向同步雲端更新)</h3>
             <div class="scroll-container">
                 <table>
                     <thead><tr><th>動作</th><th>時間</th><th>物品條碼</th><th>物品名稱</th><th>人員編號</th><th>人員姓名</th></tr></thead>
@@ -189,12 +190,14 @@
             <h2>⚙️ 系統設定與資料管理</h2>
             
             <div class="card" style="background: #e8f8f5; border-color: #a3e4d7; margin-bottom:20px;">
-                <h3>☁️ 連接 Google 表單/試算表</h3>
+                <h3>☁️ 連接 Google 雙向雲端同步</h3>
                 <div class="form-group">
                     <label>Web App 網址:</label>
-                    <input type="password" id="sheetUrl" placeholder="已自動配置預設網址" style="width: 50%;">
-                    <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存並連線</button>
+                    <input type="password" id="sheetUrl" placeholder="已自動配置預設網址" style="width: 40%;">
+                    <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存設定</button>
+                    <button class="btn-sync" onclick="uiSyncFromCloud()">📥 同步雲端最新數據</button>
                 </div>
+                <p style="text-align:center; font-size:13px; color:#555;">💡 在其他電腦首次打開系統時，請務必點擊【同步雲端最新數據】來載入同事們更新的紀錄。</p>
                 <div id="syncFeedback" class="feedback"></div>
             </div>
 
@@ -325,11 +328,14 @@
                 this.history = [];
                 this.alerts = new Map();
                 
-                // 您的專屬 Google Apps Script 網址
                 const defaultUrl = "https://script.google.com/macros/s/AKfycbwFuuUpgK1FZOZv6eBGPxIzgVrkTWNubYKuLJwBj8pU-SF4K9SJm10iz7kRUQOJHX8IgQ/exec";
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || defaultUrl; 
                 
                 this.loadData();
+                // 系統啟動時自動嘗試同步一次
+                if (this.sheetUrl) {
+                    this.loadFullStateFromCloud();
+                }
             }
 
             saveData() {
@@ -337,6 +343,9 @@
                 localStorage.setItem('sys_users', JSON.stringify(Array.from(this.users.values())));
                 localStorage.setItem('sys_history', JSON.stringify(this.history));
                 localStorage.setItem('sys_alerts', JSON.stringify(Array.from(this.alerts.entries())));
+                
+                // 每次有變更，就把整個資料庫的 JSON 覆寫到雲端備份
+                this.syncFullStateToCloud();
                 updateAllUI();
             }
 
@@ -372,7 +381,7 @@
 
                 toDelete.forEach(id => {
                     this.users.delete(id);
-                    console.log(`已自動移除超過6個月未活動人員：${id}`);
+                    console.log(`自動移除6個月無活動人員：${id}`);
                     needSave = true;
                 });
 
@@ -386,17 +395,64 @@
                 updateSyncStatusUI();
             }
 
-            // ================= Google Sheet API 資料傳送 =================
-            sendToCloud(dataPayload) {
+            // ================= 雲端雙向同步模組 =================
+            // 1. 將所有數據推播到 Google Sheet
+            syncFullStateToCloud() {
+                if (!this.sheetUrl) return; 
+                const fullState = {
+                    items: Array.from(this.items.values()),
+                    users: Array.from(this.users.values()),
+                    history: this.history,
+                    alerts: Array.from(this.alerts.entries())
+                };
+                fetch(this.sheetUrl, {
+                    method: 'POST', mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: "sync_all", fullState: JSON.stringify(fullState) })
+                });
+            }
+
+            // 2. 從 Google Sheet 抓取所有數據並覆蓋本地 (同事更新用)
+            async loadFullStateFromCloud() {
+                if (!this.sheetUrl) return { success: false, msg: "❌ 未設定雲端網址" };
+                try {
+                    const response = await fetch(this.sheetUrl);
+                    const textData = await response.text();
+                    if (!textData || textData.trim() === "" || textData === "{}") {
+                        return { success: false, msg: "⚠️ 雲端尚無備份資料" };
+                    }
+                    
+                    const data = JSON.parse(textData);
+                    if (data && data.items) {
+                        this.items.clear(); data.items.forEach(i => this.items.set(i.id, i));
+                        this.users.clear(); data.users.forEach(u => this.users.set(u.id, u));
+                        this.history = data.history || [];
+                        this.alerts.clear(); if(data.alerts) data.alerts.forEach(([n, q]) => this.alerts.set(n, q));
+
+                        // 覆寫回 localStorage 確保重新整理不會消失
+                        localStorage.setItem('sys_items', JSON.stringify(Array.from(this.items.values())));
+                        localStorage.setItem('sys_users', JSON.stringify(Array.from(this.users.values())));
+                        localStorage.setItem('sys_history', JSON.stringify(this.history));
+                        localStorage.setItem('sys_alerts', JSON.stringify(Array.from(this.alerts.entries())));
+
+                        updateAllUI();
+                        return { success: true, msg: "✅ 成功載入雲端最新資料！" };
+                    }
+                    return { success: false, msg: "⚠️ 資料格式異常" };
+                } catch(err) {
+                    console.error("同步失敗:", err);
+                    return { success: false, msg: "❌ 同步失敗，請確認網路連線" };
+                }
+            }
+
+            // 3. 推播供人眼閱讀的歷史紀錄
+            sendLogToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
                 fetch(this.sheetUrl, {
-                    method: 'POST', 
-                    mode: 'no-cors',
+                    method: 'POST', mode: 'no-cors',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(dataPayload)
-                }).then(() => {
-                    console.log("背景同步已觸發");
-                }).catch(err => console.error("雲端同步失敗", err));
+                });
             }
             // =========================================================
 
@@ -404,7 +460,7 @@
                 const newId = String(this.users.size + 1); 
                 const newUser = { id: newId, name: name, lastActive: Date.now() };
                 this.users.set(newId, newUser);
-                this.sendToCloud({ action: "adduser", id: newId, name: name });
+                this.sendLogToCloud({ action: "adduser", id: newId, name: name });
                 this.saveData();
                 return newId;
             }
@@ -443,7 +499,7 @@
 
             registerItem(itemObj) {
                 this.items.set(itemObj.id, itemObj);
-                this.sendToCloud({ action: "additem", id: itemObj.id, name: itemObj.name });
+                this.sendLogToCloud({ action: "additem", id: itemObj.id, name: itemObj.name });
                 this.saveData();
             }
 
@@ -460,7 +516,7 @@
                 item.id = newId; item.name = newName;
                 this.items.set(newId, item);
                 
-                this.sendToCloud({ action: "edititem", old: oldId, id: newId, name: newName });
+                this.sendLogToCloud({ action: "edititem", old: oldId, id: newId, name: newName });
                 this.saveData();
                 return { success: true, msg: `✅ 連動更新完成：[${newId}] ${newName}` };
             }
@@ -496,7 +552,7 @@
                 
                 const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: item.id, itemName: item.name };
                 this.history.unshift(logData);
-                this.sendToCloud(logData);
+                this.sendLogToCloud(logData);
                 this.saveData();
                 return { success: true, msg: `✅ 成功借出 ${item.name}` };
             }
@@ -514,7 +570,7 @@
                 
                 item.borrowerId = null;
                 this.history.unshift(logData);
-                this.sendToCloud(logData);
+                this.sendLogToCloud(logData);
                 this.saveData();
                 return { success: true, msg: `✅ 歸還成功：${item.name}` };
             }
@@ -543,6 +599,19 @@
             if(!url) return showFeedback('syncFeedback', '❌ 請輸入網址', false);
             system.setSheetUrl(url);
             showFeedback('syncFeedback', '✅ 同步連線已啟動', true);
+        }
+
+        // 綁定手動同步按鈕
+        async function uiSyncFromCloud() {
+            const btn = document.querySelector('.btn-sync');
+            btn.textContent = "⏳ 下載中...";
+            btn.disabled = true;
+            
+            const res = await system.loadFullStateFromCloud();
+            showFeedback('syncFeedback', res.msg, res.success);
+            
+            btn.textContent = "📥 同步雲端最新數據";
+            btn.disabled = false;
         }
 
         function uiBorrow() {
