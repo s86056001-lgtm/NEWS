@@ -11,9 +11,9 @@
         #screensaver {
             display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; 
             background-color: #000; flex-direction: column; justify-content: center; align-items: center; color: white;
-            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop');
+            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); 
             background-size: cover; background-position: center; background-blend-mode: multiply; 
-            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6);
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); 
             cursor: pointer;
         }
         #screensaver h1 { font-size: 5vw; margin: 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); letter-spacing: 2px; }
@@ -215,11 +215,11 @@
                 <h3 style="border-left-color: #e74c3c;">⏳ 借用期限與逾期處罰設定</h3>
                 <div class="form-group" style="margin-bottom: 5px;">
                     <label style="width: 140px;">預設可借天數:</label>
-                    <input type="number" id="maxBorrowDays" min="1" style="width: 60px;"> 天
+                    <input type="number" id="maxBorrowDays" value="7" min="1" style="width: 60px;"> 天
                 </div>
                 <div class="form-group" style="margin-bottom: 10px;">
                     <label style="width: 140px;">逾期處罰規則:</label>
-                    逾期 1 天，自動停權 (禁止借用) <input type="number" id="penaltyMultiplier" min="0" style="width: 60px;"> 天
+                    逾期 1 天，自動停權 (禁止借用) <input type="number" id="penaltyMultiplier" value="2" min="0" style="width: 60px;"> 天
                     <button class="btn-setting" style="margin-left:10px; background-color:#e74c3c;" onclick="uiSetRules()">儲存規則</button>
                 </div>
                 <div id="ruleFeedback" class="feedback" style="margin-left: 150px;"></div>
@@ -299,7 +299,6 @@
 
         function showScreensaver() {
             document.getElementById('screensaver').style.display = 'flex';
-            // 當進入待機，強制退回首頁導航
             document.getElementById('app-screen').style.display = 'none';
             document.getElementById('home-screen').style.display = 'flex';
         }
@@ -314,7 +313,7 @@
             document.onkeypress = resetIdleTimer;
             document.onclick = resetIdleTimer;
             
-            // 確保啟動時 UI 是最新的
+            // 初始化確保 UI 載入
             updateAllUI();
             resetIdleTimer();
         };
@@ -328,7 +327,7 @@
 
         function enterSystem(tabId, requirePwd) {
             if(requirePwd) {
-                // 進入系統設定需要密碼
+                // 需要密碼，設定回調函數
                 requireAdmin(function() {
                     _doEnterSystem(tabId);
                 });
@@ -341,13 +340,14 @@
             document.getElementById('home-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'block';
             
-            // 隱藏所有內容
             document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-            // 只顯示選中的內容
             document.getElementById(tabId).style.display = 'block';
             document.getElementById('screenTitle').textContent = screenTitles[tabId];
             
-            // 重要：這裡不呼叫 updateAllUI() 避免干擾驗證流程，因為我們在修改資料時已經會主動 updateAllUI
+            // 延遲更新 UI，確保 DOM 已顯示，避免抓不到元素的錯誤
+            setTimeout(() => {
+                updateAllUI();
+            }, 50);
         }
 
         function backToHome() {
@@ -355,7 +355,7 @@
             document.getElementById('home-screen').style.display = 'flex';
         }
 
-        // === 密碼驗證邏輯 (包含強制更新功能) ===
+        // === 密碼驗證邏輯 ===
         let pendingAction = null; 
         
         function requireAdmin(actionCallback) {
@@ -364,10 +364,8 @@
             document.getElementById('adminPwd').value = '';
             document.getElementById('newAdminPwd').value = '';
             
-            // 確保聚焦，增進體驗
             setTimeout(() => document.getElementById('adminPwd').focus(), 100);
 
-            // 檢查是否需要強制變更密碼
             if (system.isPasswordExpired()) {
                 document.getElementById('pwdPromptText').textContent = "請輸入『目前』密碼以驗證身分";
                 document.getElementById('pwdChangeArea').style.display = 'block';
@@ -392,7 +390,6 @@
                 return;
             }
 
-            // 如果是在過期狀態，要求輸入新密碼
             if (system.isPasswordExpired()) {
                 const newPwd = document.getElementById('newAdminPwd').value;
                 if (!newPwd) {
@@ -403,20 +400,18 @@
                     alert('❌ 新密碼不可與舊密碼相同！');
                     return;
                 }
-                // 更新密碼
                 system.updateAdminPassword(newPwd);
                 alert('✅ 密碼變更成功！請牢記新密碼。');
             }
 
-            // 驗證通過 (或變更成功)，關閉視窗並執行後續動作
             closeModal();
+            // 如果有暫存的動作，執行它
             if (pendingAction) {
                 pendingAction();
                 pendingAction = null;
             }
         }
 
-        // 綁定 Enter 鍵快速送出密碼
         document.getElementById('adminPwd').addEventListener("keypress", function(event) {
             if (event.key === "Enter") verifyPassword();
         });
@@ -443,10 +438,8 @@
                 this.alerts = new Map();
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || ""; 
                 
-                // 預設規則
                 this.rules = JSON.parse(localStorage.getItem('sys_rules')) || { maxDays: 7, penaltyMult: 2 };
                 
-                // 密碼管理初始化 (預設 217072)
                 if (!localStorage.getItem('sys_admin_pwd')) {
                     localStorage.setItem('sys_admin_pwd', '217072');
                     localStorage.setItem('sys_pwd_date', new Date().getTime());
@@ -455,10 +448,7 @@
                 this.loadData();
             }
 
-            // 密碼相關方法
-            getAdminPassword() {
-                return localStorage.getItem('sys_admin_pwd') || '217072';
-            }
+            getAdminPassword() { return localStorage.getItem('sys_admin_pwd') || '217072'; }
 
             updateAdminPassword(newPwd) {
                 localStorage.setItem('sys_admin_pwd', newPwd);
@@ -468,7 +458,7 @@
             isPasswordExpired() {
                 const pwdDate = parseInt(localStorage.getItem('sys_pwd_date') || '0');
                 const now = new Date().getTime();
-                const threeMonthsMs = 90 * 24 * 60 * 60 * 1000; // 90天換算成毫秒
+                const threeMonthsMs = 90 * 24 * 60 * 60 * 1000;
                 return (now - pwdDate) >= threeMonthsMs;
             }
 
@@ -502,16 +492,8 @@
                 }
             }
 
-            setSheetUrl(url) {
-                this.sheetUrl = url;
-                this.saveData();
-            }
-
-            setRules(maxDays, penaltyMult) {
-                this.rules.maxDays = parseInt(maxDays);
-                this.rules.penaltyMult = parseInt(penaltyMult);
-                this.saveData();
-            }
+            setSheetUrl(url) { this.sheetUrl = url; this.saveData(); }
+            setRules(maxDays, penaltyMult) { this.rules.maxDays = parseInt(maxDays); this.rules.penaltyMult = parseInt(penaltyMult); this.saveData(); }
 
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
@@ -522,11 +504,8 @@
                 }).catch(err => console.error("雲端同步失敗", err));
             }
 
-            setAlert(itemName, minQty) {
-                this.alerts.set(itemName, parseInt(minQty));
-                this.saveData();
-            }
-
+            setAlert(itemName, minQty) { this.alerts.set(itemName, parseInt(minQty)); this.saveData(); }
+            
             deleteAlert(itemName) {
                 if (this.alerts.has(itemName)) {
                     this.alerts.delete(itemName);
@@ -539,14 +518,10 @@
             checkAlertStatus(itemName) {
                 let total = 0; let borrowed = 0;
                 this.items.forEach(item => {
-                    if (item.name === itemName) {
-                        total++;
-                        if (item.isBorrowed) borrowed++;
-                    }
+                    if (item.name === itemName) { total++; if (item.isBorrowed) borrowed++; }
                 });
                 const available = total - borrowed;
                 const alertQty = this.alerts.get(itemName) || 0;
-                
                 if (this.alerts.has(itemName) && available <= alertQty) {
                     return { isAlert: true, available: available, alertQty: alertQty };
                 }
@@ -555,22 +530,17 @@
 
             calculateOverdue(borrowDateStr) {
                 if (!borrowDateStr) return { isOverdue: false, daysOver: 0 };
-                
                 const borrowDate = new Date(borrowDateStr);
                 const now = new Date();
                 const diffTime = Math.abs(now - borrowDate);
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); 
-                
-                if (diffDays > this.rules.maxDays) {
-                    return { isOverdue: true, daysOver: diffDays - this.rules.maxDays };
-                }
+                if (diffDays > this.rules.maxDays) return { isOverdue: true, daysOver: diffDays - this.rules.maxDays };
                 return { isOverdue: false, daysOver: 0 };
             }
 
             addUser(name, doSave = true) {
                 const nextNumber = this.users.size + 1;
                 const newId = String(nextNumber); 
-                
                 this.users.set(newId, { id: newId, name: name, banUntil: null });
                 this.sendToCloud({ type: "user_add", userId: newId, userName: name });
                 if(doSave) this.saveData();
@@ -581,21 +551,15 @@
                 const oldUsers = Array.from(this.users.values());
                 this.users.clear(); 
                 const idMapping = {}; 
-
                 oldUsers.forEach((user, index) => {
                     const newId = String(index + 1);
                     idMapping[user.id] = newId; 
                     user.id = newId;            
                     this.users.set(newId, user); 
                 });
-
                 this.items.forEach(item => {
                     if (item.borrowerId && idMapping[item.borrowerId]) item.borrowerId = idMapping[item.borrowerId];
                 });
-                this.history.forEach(log => {
-                    if (idMapping[log.userId]) log.userId = idMapping[log.userId];
-                });
-
                 this.saveData();
             }
 
@@ -624,19 +588,19 @@
                     return { success: false, msg: `❌ 修改失敗：新的條碼 [${newId}] 已經存在，不可重複！` };
                 }
 
-                this.history.forEach(log => {
-                    if (log.itemId === oldId) {
-                        log.itemId = newId;
-                        log.itemName = newName;
-                    }
-                });
+                if(oldId !== newId || item.name !== newName) {
+                    this.history.forEach(log => {
+                        if (log.itemId === oldId) {
+                            log.itemId = newId;
+                            log.itemName = newName;
+                        }
+                    });
+                }
 
                 if (oldId !== newId) this.items.delete(oldId);
-                
                 item.id = newId;
                 item.name = newName;
                 this.items.set(newId, item);
-                
                 this.saveData();
                 return { success: true, msg: `✅ 物品已成功更新為 [${newId}] ${newName}` };
             }
@@ -662,17 +626,12 @@
                 const user = this.users.get(userId);
                 const item = this.items.get(itemId);
                 
-                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先至後台註冊！` };
+                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先註冊！` };
                 
-                // 檢查停權狀態
                 if (user.banUntil) {
                     const banDate = new Date(user.banUntil);
-                    const now = new Date();
-                    if (now < banDate) {
-                        return { success: false, msg: `❌ 停權中！該人員因先前逾期未還，停權至 ${user.banUntil}。禁止借出！` };
-                    } else {
-                        user.banUntil = null; // 停權結束，解除
-                    }
+                    if (new Date() < banDate) return { success: false, msg: `❌ 停權中！該人員因先前逾期未還，停權至 ${user.banUntil}。` };
+                    else user.banUntil = null; 
                 }
 
                 if (!item) return { success: false, msg: `❌ 找不到物品條碼: ${itemId}` };
@@ -680,7 +639,7 @@
 
                 const alertStatus = this.checkAlertStatus(item.name);
                 if (alertStatus.isAlert && alertStatus.available <= alertStatus.alertQty) {
-                     return { success: false, msg: `❌ 庫存警戒！【${item.name}】可借用數量已達最低安全值 (${alertStatus.alertQty})，禁止外借！` };
+                     return { success: false, msg: `❌ 庫存警戒！【${item.name}】數量達安全值 (${alertStatus.alertQty})，禁止外借！` };
                 }
 
                 item.isBorrowed = true;
@@ -700,18 +659,15 @@
                 const userName = user ? user.name : "未知人員";
                 const userId = user ? user.id : "未知編號";
 
-                // 計算是否逾期並執行處罰
                 const overdueStatus = this.calculateOverdue(item.borrowDate);
                 let extraMsg = "";
                 
                 if (overdueStatus.isOverdue && user && this.rules.penaltyMult > 0) {
                     const penaltyDays = overdueStatus.daysOver * this.rules.penaltyMult;
-                    
                     let banDate = new Date();
                     banDate.setDate(banDate.getDate() + penaltyDays);
-                    
-                    user.banUntil = banDate.toLocaleString('zh-TW'); // 記錄解禁時間
-                    extraMsg = `\n⚠️ 【逾期處罰】逾期 ${overdueStatus.daysOver} 天，該人員將被停權借用至 ${user.banUntil}！`;
+                    user.banUntil = banDate.toLocaleString('zh-TW'); 
+                    extraMsg = `\n⚠️ 【逾期處罰】逾期 ${overdueStatus.daysOver} 天，將停權借用至 ${user.banUntil}！`;
                 }
 
                 item.isBorrowed = false;
@@ -735,6 +691,9 @@
 
         function updateSyncStatusUI() {
             const statusEl = document.getElementById('syncStatus');
+            // 防呆確保元素存在
+            if (!statusEl) return;
+            
             if (system.sheetUrl) {
                 statusEl.className = 'sync-on';
                 statusEl.textContent = '☁️ 雲端同步已開啟';
@@ -865,21 +824,29 @@
 
         // === 更新畫面資料 ===
         function updateAllUI() {
+            // 由於分開呼叫，有些元素如果不存在 (因為 display:none 或還沒載入)，就不需要強制更新它的值
             updateInventoryUI();
             updateUsersUI();
             updateActiveBorrowsUI(); 
             updateAlertListUI();
             updateSyncStatusUI();
             
-            if(system.sheetUrl) document.getElementById('sheetUrl').value = system.sheetUrl;
-            document.getElementById('maxBorrowDays').value = system.rules.maxDays;
-            document.getElementById('penaltyMultiplier').value = system.rules.penaltyMult;
+            if(document.getElementById('sheetUrl') && system.sheetUrl) {
+                document.getElementById('sheetUrl').value = system.sheetUrl;
+            }
+            if(document.getElementById('maxBorrowDays')) {
+                document.getElementById('maxBorrowDays').value = system.rules.maxDays;
+            }
+            if(document.getElementById('penaltyMultiplier')) {
+                document.getElementById('penaltyMultiplier').value = system.rules.penaltyMult;
+            }
         }
 
         function updateUsersUI() {
             const list = document.getElementById('userList');
-            list.innerHTML = '';
+            if(!list) return;
             
+            list.innerHTML = '';
             const now = new Date();
             
             system.users.forEach(user => {
@@ -905,6 +872,8 @@
         
         function updateAlertListUI() {
             const list = document.getElementById('alertList');
+            if(!list) return;
+
             list.innerHTML = '';
             if (system.alerts.size === 0) {
                 list.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #7f8c8d;">目前無任何警示設定</td></tr>`;
@@ -917,12 +886,13 @@
 
         function updateActiveBorrowsUI() {
             const list = document.getElementById('activeBorrowsList');
+            if(!list) return;
+
             list.innerHTML = '';
-            
             const activeItems = Array.from(system.items.values()).filter(item => item.isBorrowed);
             
             if (activeItems.length === 0) {
-                list.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #7f8c8d;">目前庫存全滿，無物品外借</td></tr>`;
+                list.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #7f8c8d;">目前無物品外借</td></tr>`;
                 return;
             }
 
@@ -935,8 +905,8 @@
             activeItems.forEach(item => {
                 const user = system.users.get(item.borrowerId);
                 const userName = user ? user.name : "未知人員";
-                
                 const overdueInfo = system.calculateOverdue(item.borrowDate);
+                
                 let statusTag = `<span class="tag-borrow">正常外借中</span>`;
                 let rowStyle = "";
 
@@ -961,7 +931,7 @@
             
             if(listReadOnly) listReadOnly.innerHTML = ''; 
             if(listAdmin) listAdmin.innerHTML = ''; 
-            summaryList.innerHTML = '';
+            if(summaryList) summaryList.innerHTML = '';
             
             const summaryData = {};
 
@@ -971,13 +941,11 @@
                 
                 if(item.isBorrowed) {
                     const overdueInfo = system.calculateOverdue(item.borrowDate);
-                    
                     if(overdueInfo.isOverdue) {
                         statusText = `<span class="status-borrowed">🔴 逾期未還 (${overdueInfo.daysOver}天)</span>`;
                     } else {
                         statusText = `<span class="status-warning" style="color:#d35400;">🟡 已借出</span>`;
                     }
-                    
                     const user = system.users.get(item.borrowerId);
                     borrowerText = user ? `${user.name} (${user.id})` : item.borrowerId;
                 }
@@ -1006,21 +974,23 @@
                 if (item.isBorrowed) summaryData[item.name].borrowed += 1;
             });
 
-            for (const [name, data] of Object.entries(summaryData)) {
-                const available = data.total - data.borrowed;
-                const alertStatus = system.checkAlertStatus(name);
-                let lightHtml = `<span style="color: #27ae60; font-size: 20px;">🟢 安全</span>`;
-                let rowStyle = "";
-                
-                if (alertStatus.isAlert) {
-                    lightHtml = `<span style="color: #e74c3c; font-size: 20px; font-weight: bold;">🔴 警戒停借</span>`;
-                    rowStyle = "background-color: #fdedec;"; 
-                } else if (system.alerts.has(name) && available <= alertStatus.alertQty + 1) {
-                     lightHtml = `<span style="color: #f39c12; font-size: 20px;">🟡 即將不足</span>`;
-                }
+            if(summaryList) {
+                for (const [name, data] of Object.entries(summaryData)) {
+                    const available = data.total - data.borrowed;
+                    const alertStatus = system.checkAlertStatus(name);
+                    let lightHtml = `<span style="color: #27ae60; font-size: 20px;">🟢 安全</span>`;
+                    let rowStyle = "";
+                    
+                    if (alertStatus.isAlert) {
+                        lightHtml = `<span style="color: #e74c3c; font-size: 20px; font-weight: bold;">🔴 警戒停借</span>`;
+                        rowStyle = "background-color: #fdedec;"; 
+                    } else if (system.alerts.has(name) && available <= alertStatus.alertQty + 1) {
+                         lightHtml = `<span style="color: #f39c12; font-size: 20px;">🟡 即將不足</span>`;
+                    }
 
-                const alertQtyDisplay = system.alerts.has(name) ? system.alerts.get(name) : '未設定';
-                summaryList.innerHTML += `<tr style="${rowStyle}"><td style="font-weight: bold;">${name}</td><td>${data.total}</td><td style="font-weight: bold; font-size: 16px;">${available}</td><td style="color: #e74c3c;">${data.borrowed}</td><td style="color: #7f8c8d;">${alertQtyDisplay}</td><td>${lightHtml}</td></tr>`;
+                    const alertQtyDisplay = system.alerts.has(name) ? system.alerts.get(name) : '未設定';
+                    summaryList.innerHTML += `<tr style="${rowStyle}"><td style="font-weight: bold;">${name}</td><td>${data.total}</td><td style="font-weight: bold; font-size: 16px;">${available}</td><td style="color: #e74c3c;">${data.borrowed}</td><td style="color: #7f8c8d;">${alertQtyDisplay}</td><td>${lightHtml}</td></tr>`;
+                }
             }
         }
     </script>
