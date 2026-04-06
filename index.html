@@ -136,7 +136,7 @@
             <div class="form-group">
                 <label>借還數量：</label>
                 <input type="number" id="actionQty" value="1" min="1" style="width: 80px;">
-                <span style="font-size: 12px; color: #7f8c8d; margin-left: 10px;">(若該物品有多個庫存)</span>
+                <span style="font-size: 12px; color: #7f8c8d; margin-left: 10px;">(若刷原條碼，系統將自動分派對應流水號)</span>
             </div>
             <div class="center-action">
                 <button class="btn-borrow" onclick="uiBorrow()">📤 借出登記</button>
@@ -175,7 +175,7 @@
                     <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存設定</button>
                     <button class="btn-sync" onclick="uiSyncFromCloud()">📥 同步雲端最新數據</button>
                 </div>
-                <p style="text-align:center; font-size:13px; color:#555;">💡 若您直接在 Google 試算表中打字建檔，請點擊【同步雲端最新數據】立刻載入最新順序與資料！</p>
+                <p style="text-align:center; font-size:13px; color:#555;">💡 若您直接在 Google 試算表中建檔，請點擊【同步雲端最新數據】立刻載入最新順序與資料！</p>
                 <div id="syncFeedback" class="feedback"></div>
             </div>
 
@@ -196,14 +196,14 @@
 
                 <div class="card">
                     <h3>📦 庫存建檔與連動修改</h3>
-                    <p style="font-size:12px; color:#27ae60;">* 提示：若入庫數量大於 1，系統將自動為條碼加上 -1, -2 尾綴建檔。</p>
+                    <p style="font-size:12px; color:#27ae60;">* 提示：建檔時僅需登錄【原條碼】，系統會依據入庫數量自動管控流水號。</p>
                     <div class="form-group">
                         <label>舊條碼:</label>
                         <input type="text" id="oldItemId" placeholder="若要修改請輸入舊條碼 (新增免填)">
                     </div>
                     <div class="form-group">
                         <label>新條碼:</label>
-                        <input type="text" id="newItemId" placeholder="輸入要建檔或更新的條碼">
+                        <input type="text" id="newItemId" placeholder="輸入要建檔或更新的【原條碼】">
                     </div>
                     <div class="form-group">
                         <label>物品名稱:</label>
@@ -236,10 +236,10 @@
 
                 <div class="card" style="border-color: #fadbd8; background: #fff5f5;">
                     <h3 style="border-left-color: var(--danger); color: var(--danger);">🗑️ 庫存清單與統一刪除區</h3>
-                    <p style="font-size:12px; color:#555;">(此處依照資料庫建檔順序排列)</p>
+                    <p style="font-size:12px; color:#555;">(此處完美對應資料庫建檔順序)</p>
                     <div class="scroll-container" style="max-height: 250px;">
                         <table>
-                            <thead><tr><th>物品條碼</th><th>名稱</th><th>總數</th><th>狀態</th><th>操作</th></tr></thead>
+                            <thead><tr><th>物品原條碼</th><th>名稱</th><th>總數</th><th>狀態</th><th>操作</th></tr></thead>
                             <tbody id="adminInventoryList"></tbody>
                         </table>
                     </div>
@@ -291,24 +291,31 @@
                 this.history = JSON.parse(localStorage.getItem('sys_history') || '[]');
                 const storedAlerts = JSON.parse(localStorage.getItem('sys_alerts') || '[]');
                 
-                this.items.clear(); storedItems.forEach(item => this.items.set(item.id, { ...item, borrowedBy: item.borrowedBy || [] }));
+                this.items.clear(); storedItems.forEach(item => this.items.set(item.id, { ...item, borrowedMap: new Map() }));
                 this.users.clear(); storedUsers.forEach(user => this.users.set(user.id, user));
                 this.alerts.clear(); storedAlerts.forEach(([name, qty]) => this.alerts.set(name, qty));
+                this.rebuildState();
                 this.cleanInactiveUsers(); 
             }
 
+            // 動態從歷史紀錄推算每項物品的【各別流水號】被誰借走
             rebuildState() {
-                this.items.forEach(item => item.borrowedBy = []);
+                this.items.forEach(item => item.borrowedMap = new Map());
                 for (let i = this.history.length - 1; i >= 0; i--) {
                     const log = this.history[i];
-                    const item = this.items.get(log.itemId);
-                    if (item) {
+                    
+                    // 尋找物品 (處理輸入原條碼或流水號的狀況)
+                    let baseItem = this.items.get(log.itemId);
+                    if (!baseItem) {
+                        const match = log.itemId.match(/^(.*)-(\d+)$/);
+                        if (match) baseItem = this.items.get(match[1]);
+                    }
+                    
+                    if (baseItem) {
                         if (log.action === "借出") {
-                            // 同一項物品可以借出多次，所以我們用 Array 來記 (不防呆重覆人，因為有可能一次借兩台)
-                            item.borrowedBy.push(log.userId);
+                            baseItem.borrowedMap.set(log.itemId, log.userId);
                         } else if (log.action === "歸還") {
-                            const idx = item.borrowedBy.indexOf(log.userId);
-                            if (idx !== -1) item.borrowedBy.splice(idx, 1);
+                            baseItem.borrowedMap.delete(log.itemId);
                         }
                     }
                 }
@@ -321,7 +328,7 @@
                 this.users.forEach(user => {
                     const lastActive = user.lastActive || now; 
                     if (now - lastActive > SIX_MONTHS_MS) {
-                        const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowedBy.includes(user.id));
+                        const hasBorrowed = Array.from(this.items.values()).some(item => Array.from(item.borrowedMap.values()).includes(user.id));
                         if (!hasBorrowed) toDelete.push(user.id);
                     } else if (!user.lastActive) { user.lastActive = now; needSave = true; }
                 });
@@ -334,7 +341,7 @@
 
             setSheetUrl(url) { this.sheetUrl = url; localStorage.setItem('sys_sheet_url', url); updateSyncStatusUI(); }
 
-            // ================= Google Sheet 雙向同步核心 =================
+            // ================= 雙向雲端同步核心 =================
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
                 fetch(this.sheetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dataPayload) });
@@ -347,18 +354,18 @@
                     const data = await response.json();
                     
                     if (data && data.items) {
-                        this.items.clear(); data.items.forEach(i => this.items.set(i.id, { ...i, borrowedBy: [] }));
+                        this.items.clear(); data.items.forEach(i => this.items.set(i.id, { ...i, borrowedMap: new Map() }));
                         this.users.clear(); data.users.forEach(u => this.users.set(u.id, u));
                         this.history = data.history || [];
                         this.alerts.clear(); if(data.alerts) data.alerts.forEach(([n, q]) => this.alerts.set(n, q));
                         
                         this.rebuildState();
                         this.saveLocalData();
-                        return { success: true, msg: "✅ 成功載入雲端資料庫最新資料！" };
+                        return { success: true, msg: "✅ 成功載入並依照順序排序雲端資料！" };
                     }
                     return { success: false, msg: "⚠️ 資料格式異常" };
                 } catch(err) {
-                    return { success: false, msg: "❌ 同步失敗，請確認網路或試算表代碼是否已更新" };
+                    return { success: false, msg: "❌ 同步失敗，請確認網路或 Apps Script 是否已更新部署" };
                 }
             }
 
@@ -375,15 +382,15 @@
             reindexUsers() {
                 const oldUsers = Array.from(this.users.values()); this.users.clear(); const idMapping = {}; 
                 oldUsers.forEach((user, index) => { const newId = String(index + 1); idMapping[user.id] = newId; user.id = newId; this.users.set(newId, user); });
-                this.items.forEach(item => {
-                    item.borrowedBy = item.borrowedBy.map(uid => idMapping[uid] ? idMapping[uid] : uid);
-                });
+                
+                // 更新歷史紀錄中的人員編號對應
                 this.history.forEach(log => { if (idMapping[log.userId]) log.userId = idMapping[log.userId]; });
+                this.rebuildState();
                 this.saveLocalData();
             }
 
             deleteUser(userId) {
-                const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowedBy.includes(userId));
+                const hasBorrowed = Array.from(this.items.values()).some(item => Array.from(item.borrowedMap.values()).includes(userId));
                 if (hasBorrowed) return { success: false, msg: `❌ 無法刪除：該人員尚有未歸還物品！` };
                 if (this.users.has(userId)) {
                     this.users.delete(userId);
@@ -394,19 +401,10 @@
                 return { success: false, msg: `❌ 找不到人員資料。` };
             }
 
-            // 🌟 核心修改：入庫支援自動切分編號
-            registerItem(baseId, name, qty) {
-                let successCount = 0;
-                for (let i = 0; i < qty; i++) {
-                    const id = qty > 1 ? `${baseId}-${i + 1}` : baseId;
-                    if (this.items.has(id)) continue; // 跳過重複的
-                    
-                    this.items.set(id, { id: id, name: name, qty: 1, borrowedBy: [] });
-                    this.sendToCloud({ action: "additem", id: id, name: name, qty: 1 });
-                    successCount++;
-                }
+            registerItem(id, name, qty) {
+                this.items.set(id, { id: id, name: name, qty: qty, borrowedMap: new Map() });
                 this.saveLocalData();
-                return successCount;
+                this.sendToCloud({ action: "additem", id: id, name: name, qty: qty });
             }
 
             editItem(oldId, newId, newName, newQty) {
@@ -414,101 +412,161 @@
                 if (oldId !== newId && this.items.has(newId)) return { success: false, msg: `❌ 新條碼 [${newId}] 已存在！` };
 
                 const item = this.items.get(oldId);
-                this.history.forEach(log => { if (log.itemId === oldId) { log.itemId = newId; log.itemName = newName; } });
+                if (oldId !== newId && item.borrowedMap.size > 0) return { success: false, msg: `❌ 有外借中時不可修改條碼，請先歸還！` };
+                
                 if (oldId !== newId) this.items.delete(oldId);
                 
                 item.id = newId; item.name = newName; item.qty = newQty; 
                 this.items.set(newId, item);
                 
+                // 若只改名稱，歷史紀錄同步換名
+                this.history.forEach(log => { 
+                    if (log.itemId === oldId || log.itemId.startsWith(oldId + '-')) log.itemName = newName; 
+                });
+                
                 this.saveLocalData();
                 this.sendToCloud({ action: "edititem", old: oldId, id: newId, name: newName, qty: newQty });
-                return { success: true, msg: `✅ 連動更新完成：[${newId}] ${newName} (共 ${newQty} 個)` };
+                return { success: true, msg: `✅ 連動更新完成：[${newId}] ${newName} (總量: ${newQty})` };
             }
 
             deleteItem(itemId) {
                 const item = this.items.get(itemId);
                 if (!item) return { success: false, msg: `❌ 找不到該物品。` };
-                if (item.borrowedBy.length > 0) return { success: false, msg: `❌ 無法刪除：尚有 ${item.borrowedBy.length} 個外借中！` };
+                if (item.borrowedMap.size > 0) return { success: false, msg: `❌ 無法刪除：尚有 ${item.borrowedMap.size} 個外借中！` };
                 this.items.delete(itemId);
                 this.saveLocalData();
                 this.sendToCloud({ action: "deleteitem", id: itemId });
                 return { success: true, msg: `✅ 成功刪除庫存：${item.name} (${itemId})` };
             }
 
-            // 🌟 借用邏輯：支援借用數量
-            borrowItem(userId, itemId, qty) {
-                const user = this.users.get(userId); const item = this.items.get(itemId);
+            // 🌟 借用邏輯：自動計算流水號分配
+            borrowItem(userId, inputBarcode, qty) {
+                const user = this.users.get(userId);
                 if (!user) return { success: false, msg: `❌ 無效的人員編號！` };
-                if (!item) return { success: false, msg: `❌ 無效的物品條碼！` };
                 
-                // 確認剩餘數量是否足夠
-                const availableToBorrow = item.qty - item.borrowedBy.length;
-                if (qty > availableToBorrow) {
-                    return { success: false, msg: `❌ 庫存不足！該條碼僅剩 ${availableToBorrow} 個可借。` };
+                let baseItem = this.items.get(inputBarcode);
+                let specifiedSubId = null;
+
+                // 判斷是輸入原條碼還是特定流水號 (如 A01 vs A01-2)
+                if (!baseItem) {
+                    const match = inputBarcode.match(/^(.*)-(\d+)$/);
+                    if (match) {
+                        baseItem = this.items.get(match[1]);
+                        specifiedSubId = inputBarcode;
+                    }
+                } else {
+                    if (baseItem.qty === 1) specifiedSubId = inputBarcode;
                 }
 
-                user.lastActive = Date.now();
-                
-                // 警示檢查 (總庫存 - 總借出)
+                if (!baseItem) return { success: false, msg: `❌ 無效的物品條碼！` };
+
+                // 狀況一：指定了某個流水號
+                if (specifiedSubId) {
+                    if (qty > 1) return { success: false, msg: `❌ 指定特定流水號時，數量只能為 1！` };
+                    if (baseItem.borrowedMap.has(specifiedSubId)) return { success: false, msg: `❌ 該物品 (${specifiedSubId}) 已被借走！` };
+                    this.executeBorrow(user, baseItem, specifiedSubId);
+                    return { success: true, msg: `✅ 成功借出 ${baseItem.name} (${specifiedSubId})` };
+                }
+
+                // 狀況二：輸入原條碼，系統自動分配未借出的流水號
+                let availableSubIds = [];
+                for (let i = 1; i <= baseItem.qty; i++) {
+                    let subId = baseItem.qty > 1 ? `${baseItem.id}-${i}` : baseItem.id;
+                    if (!baseItem.borrowedMap.has(subId)) availableSubIds.push(subId);
+                }
+
+                if (availableSubIds.length < qty) return { success: false, msg: `❌ 庫存不足！僅剩 ${availableSubIds.length} 個可借。` };
+
+                // 安全警戒檢查
                 let total = 0, borrowed = 0;
-                this.items.forEach(i => { if(i.name === item.name){ total += i.qty; borrowed += i.borrowedBy.length; } });
-                const alertQty = this.alerts.get(item.name) || 0;
-                if (this.alerts.has(item.name) && (total - (borrowed + qty)) < alertQty) {
-                     return { success: false, msg: `❌ 庫存警戒！剩餘數量將低於安全值，禁止外借！` };
+                this.items.forEach(i => { if(i.name === baseItem.name){ total += i.qty; borrowed += i.borrowedMap.size; } });
+                const alertQty = this.alerts.get(baseItem.name) || 0;
+                if (this.alerts.has(baseItem.name) && (total - (borrowed + qty)) < alertQty) {
+                     return { success: false, msg: `❌ 庫存警戒！剩餘數量低於安全值，禁止外借！` };
                 }
 
-                // 執行多次借出
-                for(let i=0; i<qty; i++) {
-                    item.borrowedBy.push(user.id);
-                    const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: item.id, itemName: item.name };
-                    this.history.unshift(logData);
-                    this.sendToCloud(logData);
+                // 批次執行借出
+                for (let i = 0; i < qty; i++) {
+                    this.executeBorrow(user, baseItem, availableSubIds[i], false);
                 }
-                
-                this.saveLocalData();
-                return { success: true, msg: `✅ 成功借出 ${item.name} x${qty}` };
+                this.saveLocalData(); // 批次存檔
+                return { success: true, msg: `✅ 成功借出 ${baseItem.name} x${qty}` };
+            }
+
+            executeBorrow(user, baseItem, subId, autoSave = true) {
+                user.lastActive = Date.now();
+                baseItem.borrowedMap.set(subId, user.id);
+                const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: subId, itemName: baseItem.name };
+                this.history.unshift(logData);
+                this.sendToCloud(logData);
+                if(autoSave) this.saveLocalData();
             }
             
-            // 🌟 歸還邏輯：支援歸還數量
-            returnItem(itemId, inputUserId, qty) {
-                const item = this.items.get(itemId);
-                if (!item) return { success: false, msg: `❌ 找不到物品！` };
-                if (item.borrowedBy.length === 0) return { success: false, msg: `⚠️ 目前全數在庫，無需歸還。` };
+            // 🌟 歸還邏輯：自動計算流水號歸還
+            returnItem(inputBarcode, inputUserId, qty) {
+                let baseItem = this.items.get(inputBarcode);
+                let specifiedSubId = null;
 
+                if (!baseItem) {
+                    const match = inputBarcode.match(/^(.*)-(\d+)$/);
+                    if (match) {
+                        baseItem = this.items.get(match[1]);
+                        specifiedSubId = inputBarcode;
+                    }
+                } else {
+                    if (baseItem.qty === 1) specifiedSubId = inputBarcode;
+                }
+
+                if (!baseItem) return { success: false, msg: `❌ 找不到該物品！` };
+                if (baseItem.borrowedMap.size === 0) return { success: false, msg: `⚠️ 目前全數在庫，無需歸還。` };
+
+                // 狀況一：指定特定流水號歸還
+                if (specifiedSubId) {
+                    if (qty > 1) return { success: false, msg: `❌ 指定特定流水號時，數量只能為 1！` };
+                    let borrowerId = baseItem.borrowedMap.get(specifiedSubId);
+                    if (!borrowerId) return { success: false, msg: `⚠️ 該物品 (${specifiedSubId}) 未被借出！` };
+                    if (inputUserId && borrowerId !== inputUserId) return { success: false, msg: `❌ 此物品是由編號 ${borrowerId} 借出的！` };
+                    
+                    this.executeReturn(borrowerId, baseItem, specifiedSubId);
+                    return { success: true, msg: `✅ 歸還成功：${baseItem.name} (${specifiedSubId})` };
+                }
+
+                // 狀況二：輸入原條碼，系統自動幫使用者歸還他借出的流水號
+                let userIdsSet = new Set(baseItem.borrowedMap.values());
                 let userId = inputUserId;
                 if (!userId) {
-                    // 如果沒有填歸還人
-                    const uniqueBorrowers = [...new Set(item.borrowedBy)];
-                    if (uniqueBorrowers.length === 1) {
-                        userId = uniqueBorrowers[0]; // 只有一個人借，自動判斷是誰
-                    } else {
-                        return { success: false, msg: `⚠️ 此物品由多人借用，請填寫【人員編號】以確認是誰歸還的！` };
+                    if (userIdsSet.size === 1) {
+                        userId = Array.from(userIdsSet)[0]; // 只有一個人借，自動判斷
+                    } else if (userIdsSet.size > 1) {
+                        return { success: false, msg: `⚠️ 此物品目前有多人借用，請填寫【人員編號】確認！` };
                     }
-                } else if (!item.borrowedBy.includes(userId)) {
-                    return { success: false, msg: `❌ 該人員並未借用此物品！` };
                 }
 
-                // 計算這個人借了幾個
-                let userBorrowedCount = 0;
-                item.borrowedBy.forEach(uid => { if(uid === userId) userBorrowedCount++; });
-                
-                if (qty > userBorrowedCount) {
-                    return { success: false, msg: `❌ 該人員僅借用了 ${userBorrowedCount} 個，無法歸還 ${qty} 個！` };
+                let userBorrowedSubIds = [];
+                for (let [subId, uid] of baseItem.borrowedMap.entries()) {
+                    if (uid === userId) userBorrowedSubIds.push(subId);
                 }
 
+                if (userBorrowedSubIds.length < qty) {
+                    return { success: false, msg: `❌ 該人員僅借用 ${userBorrowedSubIds.length} 個，無法歸還 ${qty} 個！` };
+                }
+
+                // 批次執行歸還
+                for(let i=0; i<qty; i++) {
+                    this.executeReturn(userId, baseItem, userBorrowedSubIds[i], false);
+                }
+                this.saveLocalData();
+                return { success: true, msg: `✅ 歸還成功：${baseItem.name} x${qty}` };
+            }
+
+            executeReturn(userId, baseItem, subId, autoSave = true) {
                 const user = this.users.get(userId);
                 if(user) user.lastActive = Date.now(); 
-                
-                // 執行多次歸還
-                for(let i=0; i<qty; i++) {
-                    item.borrowedBy.splice(item.borrowedBy.indexOf(userId), 1);
-                    const logData = { action: "歸還", time: getFormattedDate(), userId: userId, userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
-                    this.history.unshift(logData);
-                    this.sendToCloud(logData);
-                }
-
-                this.saveLocalData();
-                return { success: true, msg: `✅ 歸還成功：${item.name} x${qty}` };
+                baseItem.borrowedMap.delete(subId);
+                const logData = { action: "歸還", time: getFormattedDate(), userId: userId, userName: user?user.name:"未知", itemId: subId, itemName: baseItem.name };
+                this.history.unshift(logData);
+                this.sendToCloud(logData);
+                if(autoSave) this.saveLocalData();
             }
 
             setAlert(name, qty) { this.alerts.set(name, parseInt(qty)); this.saveLocalData(); this.sendToCloud({ action: "setalert", name: name, qty: qty }); }
@@ -572,13 +630,10 @@
             const name = document.getElementById('newItemName').value.trim();
             const qty = parseInt(document.getElementById('newItemQty').value) || 1;
             if(!id || !name) return showFeedback('itemFeedback', '❌ 條碼與名稱不可空白', false);
+            if(system.items.has(id)) return showFeedback('itemFeedback', '❌ 條碼已存在', false);
             
-            const successCount = system.registerItem(id, name, qty);
-            if (successCount === qty) {
-                showFeedback('itemFeedback', `✅ 入庫成功：產生 ${successCount} 筆條碼`, true); 
-            } else {
-                showFeedback('itemFeedback', `⚠️ 入庫完成：產生 ${successCount} 筆 (有 ${qty - successCount} 筆重複跳過)`, false);
-            }
+            system.registerItem(id, name, qty);
+            showFeedback('itemFeedback', `✅ 入庫成功：${name} 共 ${qty} 個`, true); 
             document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = ''; document.getElementById('newItemQty').value = '1';
         }
 
@@ -636,10 +691,10 @@
             system.items.forEach(item => {
                 if (!sumData[item.name]) sumData[item.name] = { t: 0, b: 0 };
                 sumData[item.name].t += item.qty; 
-                sumData[item.name].b += item.borrowedBy.length;
+                sumData[item.name].b += item.borrowedMap.size;
 
-                const avail = item.qty - item.borrowedBy.length;
-                let statHtml = item.borrowedBy.length > 0 ? `<span style="color:var(--warning)">外借中(${item.borrowedBy.length})</span>` : `<span style="color:var(--success)">全數在庫</span>`;
+                const avail = item.qty - item.borrowedMap.size;
+                let statHtml = item.borrowedMap.size > 0 ? `<span style="color:var(--warning)">外借中(${item.borrowedMap.size})</span>` : `<span style="color:var(--success)">全數在庫</span>`;
                 if (avail === 0) statHtml = `<span style="color:var(--danger)">全數借出</span>`;
 
                 aList.innerHTML += `<tr><td>${item.id}</td><td>${item.name}</td><td>${item.qty}</td><td>${statHtml}</td><td><button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button></td></tr>`;
