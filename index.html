@@ -11,9 +11,9 @@
         #screensaver {
             display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; 
             background-color: #000; flex-direction: column; justify-content: center; align-items: center; color: white;
-            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); /* 槽車事故示意圖 */
+            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop');
             background-size: cover; background-position: center; background-blend-mode: multiply; 
-            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); /* 讓文字清楚一點的暗化處理 */
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6);
             cursor: pointer;
         }
         #screensaver h1 { font-size: 5vw; margin: 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); letter-spacing: 2px; }
@@ -23,7 +23,7 @@
         /* 密碼輸入框 Modal */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
         .modal-content { background-color: #fff; padding: 30px; border-radius: 8px; text-align: center; width: 350px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);}
-        .modal-content input { width: 80%; margin: 15px 0; text-align: center; padding: 10px; font-size:16px;}
+        .modal-content input { width: 80%; margin: 15px 0; text-align: center; padding: 10px; font-size:16px; border: 1px solid #ccc; border-radius: 4px;}
         .modal-content h3 { margin-top:0; color: #e74c3c; }
 
         /* 首頁快捷鍵區域 */
@@ -113,11 +113,11 @@
     <div id="home-screen">
         <div class="home-title">📦 智能雲端借還系統</div>
         <div class="shortcut-container">
-            <button class="shortcut-btn" onclick="enterSystem('tab-front')">
+            <button class="shortcut-btn" onclick="enterSystem('tab-front', false)">
                 <span class="shortcut-icon">🔄</span>
                 快速作業
             </button>
-            <button class="shortcut-btn" onclick="enterSystem('tab-inventory')">
+            <button class="shortcut-btn" onclick="enterSystem('tab-inventory', false)">
                 <span class="shortcut-icon">📋</span>
                 庫存總表
             </button>
@@ -215,11 +215,11 @@
                 <h3 style="border-left-color: #e74c3c;">⏳ 借用期限與逾期處罰設定</h3>
                 <div class="form-group" style="margin-bottom: 5px;">
                     <label style="width: 140px;">預設可借天數:</label>
-                    <input type="number" id="maxBorrowDays" value="7" min="1" style="width: 60px;"> 天
+                    <input type="number" id="maxBorrowDays" min="1" style="width: 60px;"> 天
                 </div>
                 <div class="form-group" style="margin-bottom: 10px;">
                     <label style="width: 140px;">逾期處罰規則:</label>
-                    逾期 1 天，自動停權 (禁止借用) <input type="number" id="penaltyMultiplier" value="2" min="0" style="width: 60px;"> 天
+                    逾期 1 天，自動停權 (禁止借用) <input type="number" id="penaltyMultiplier" min="0" style="width: 60px;"> 天
                     <button class="btn-setting" style="margin-left:10px; background-color:#e74c3c;" onclick="uiSetRules()">儲存規則</button>
                 </div>
                 <div id="ruleFeedback" class="feedback" style="margin-left: 150px;"></div>
@@ -292,7 +292,6 @@
 
         function resetIdleTimer() {
             clearTimeout(idleTimer);
-            // 只要不是在螢幕保護程式狀態，就重新計算時間
             if(document.getElementById('screensaver').style.display !== 'flex') {
                 idleTimer = setTimeout(showScreensaver, IDLE_TIMEOUT);
             }
@@ -301,7 +300,8 @@
         function showScreensaver() {
             document.getElementById('screensaver').style.display = 'flex';
             // 當進入待機，強制退回首頁導航
-            backToHome();
+            document.getElementById('app-screen').style.display = 'none';
+            document.getElementById('home-screen').style.display = 'flex';
         }
 
         function wakeUp() {
@@ -309,11 +309,13 @@
             resetIdleTimer();
         }
 
-        // 監聽所有滑鼠與鍵盤動作
         window.onload = function() {
             document.onmousemove = resetIdleTimer;
             document.onkeypress = resetIdleTimer;
             document.onclick = resetIdleTimer;
+            
+            // 確保啟動時 UI 是最新的
+            updateAllUI();
             resetIdleTimer();
         };
 
@@ -324,7 +326,7 @@
             'tab-admin': '⚙️ 系統後台設定'
         };
 
-        function enterSystem(tabId, requirePwd = false) {
+        function enterSystem(tabId, requirePwd) {
             if(requirePwd) {
                 // 進入系統設定需要密碼
                 requireAdmin(function() {
@@ -345,7 +347,7 @@
             document.getElementById(tabId).style.display = 'block';
             document.getElementById('screenTitle').textContent = screenTitles[tabId];
             
-            updateAllUI();
+            // 重要：這裡不呼叫 updateAllUI() 避免干擾驗證流程，因為我們在修改資料時已經會主動 updateAllUI
         }
 
         function backToHome() {
@@ -361,7 +363,9 @@
             document.getElementById('passwordModal').style.display = 'flex';
             document.getElementById('adminPwd').value = '';
             document.getElementById('newAdminPwd').value = '';
-            document.getElementById('adminPwd').focus();
+            
+            // 確保聚焦，增進體驗
+            setTimeout(() => document.getElementById('adminPwd').focus(), 100);
 
             // 檢查是否需要強制變更密碼
             if (system.isPasswordExpired()) {
@@ -404,10 +408,22 @@
                 alert('✅ 密碼變更成功！請牢記新密碼。');
             }
 
-            // 驗證通過 (或變更成功)，執行後續動作
+            // 驗證通過 (或變更成功)，關閉視窗並執行後續動作
             closeModal();
-            if (pendingAction) pendingAction();
+            if (pendingAction) {
+                pendingAction();
+                pendingAction = null;
+            }
         }
+
+        // 綁定 Enter 鍵快速送出密碼
+        document.getElementById('adminPwd').addEventListener("keypress", function(event) {
+            if (event.key === "Enter") verifyPassword();
+        });
+        document.getElementById('newAdminPwd').addEventListener("keypress", function(event) {
+            if (event.key === "Enter") verifyPassword();
+        });
+
 
         // === 系統核心邏輯 ===
         function getFormattedDate() {
@@ -426,9 +442,11 @@
                 this.history = [];
                 this.alerts = new Map();
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || ""; 
+                
+                // 預設規則
                 this.rules = JSON.parse(localStorage.getItem('sys_rules')) || { maxDays: 7, penaltyMult: 2 };
                 
-                // 密碼管理初始化
+                // 密碼管理初始化 (預設 217072)
                 if (!localStorage.getItem('sys_admin_pwd')) {
                     localStorage.setItem('sys_admin_pwd', '217072');
                     localStorage.setItem('sys_pwd_date', new Date().getTime());
@@ -439,7 +457,7 @@
 
             // 密碼相關方法
             getAdminPassword() {
-                return localStorage.getItem('sys_admin_pwd');
+                return localStorage.getItem('sys_admin_pwd') || '217072';
             }
 
             updateAdminPassword(newPwd) {
@@ -471,7 +489,6 @@
 
                 storedItems.forEach(item => this.items.set(item.id, item));
                 storedUsers.forEach(user => {
-                    // 初始化確保每個 user 都有 banUntil 屬性
                     if(user.banUntil === undefined) user.banUntil = null;
                     this.users.set(user.id, user);
                 });
@@ -536,13 +553,11 @@
                 return { isAlert: false, available: available, alertQty: alertQty };
             }
 
-            // 計算逾期狀況
             calculateOverdue(borrowDateStr) {
                 if (!borrowDateStr) return { isOverdue: false, daysOver: 0 };
                 
                 const borrowDate = new Date(borrowDateStr);
                 const now = new Date();
-                // 計算相差毫秒，轉換成天數 (無條件捨去取整數)
                 const diffTime = Math.abs(now - borrowDate);
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); 
                 
@@ -647,7 +662,7 @@
                 const user = this.users.get(userId);
                 const item = this.items.get(itemId);
                 
-                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先註冊！` };
+                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先至後台註冊！` };
                 
                 // 檢查停權狀態
                 if (user.banUntil) {
@@ -692,7 +707,6 @@
                 if (overdueStatus.isOverdue && user && this.rules.penaltyMult > 0) {
                     const penaltyDays = overdueStatus.daysOver * this.rules.penaltyMult;
                     
-                    // 設定停權到期日
                     let banDate = new Date();
                     banDate.setDate(banDate.getDate() + penaltyDays);
                     
@@ -714,9 +728,9 @@
         // === UI 互動綁定 ===
         function showFeedback(elementId, message, isSuccess) {
             const el = document.getElementById(elementId);
-            el.innerText = message; // 支援換行符號
+            el.innerText = message; 
             el.style.color = isSuccess ? '#27ae60' : '#e74c3c';
-            setTimeout(() => { el.innerText = ''; }, 7000); // 延長顯示時間讓使用者看清楚處罰
+            setTimeout(() => { el.innerText = ''; }, 7000); 
         }
 
         function updateSyncStatusUI() {
@@ -853,7 +867,7 @@
         function updateAllUI() {
             updateInventoryUI();
             updateUsersUI();
-            updateActiveBorrowsUI(); // 更新前台的目前外借狀態
+            updateActiveBorrowsUI(); 
             updateAlertListUI();
             updateSyncStatusUI();
             
@@ -876,7 +890,6 @@
                     if (now < banDate) {
                         banStatus = `<span style="color:#c0392b; font-weight:bold;">停權至 ${user.banUntil}</span>`;
                     } else {
-                        // 停權已過期，但尚未觸發借用，僅顯示為正常
                         banStatus = `<span style="color:#27ae60;">正常 (曾停權)</span>`;
                     }
                 }
@@ -902,12 +915,10 @@
             });
         }
 
-        // 更新前台：目前外借中的名單 (加入逾期偵測)
         function updateActiveBorrowsUI() {
             const list = document.getElementById('activeBorrowsList');
             list.innerHTML = '';
             
-            // 取出外借中物品
             const activeItems = Array.from(system.items.values()).filter(item => item.isBorrowed);
             
             if (activeItems.length === 0) {
@@ -915,7 +926,6 @@
                 return;
             }
 
-            // 排序：逾期者排最上面，其次按借出時間舊到新
             activeItems.sort((a, b) => {
                 const aDate = new Date(a.borrowDate);
                 const bDate = new Date(b.borrowDate);
@@ -926,7 +936,6 @@
                 const user = system.users.get(item.borrowerId);
                 const userName = user ? user.name : "未知人員";
                 
-                // 檢查是否逾期
                 const overdueInfo = system.calculateOverdue(item.borrowDate);
                 let statusTag = `<span class="tag-borrow">正常外借中</span>`;
                 let rowStyle = "";
@@ -973,7 +982,6 @@
                     borrowerText = user ? `${user.name} (${user.id})` : item.borrowerId;
                 }
                 
-                // 庫存總表的純檢視清單
                 if(listReadOnly) {
                     listReadOnly.innerHTML += `<tr>
                         <td><strong>${item.id}</strong></td>
@@ -983,7 +991,6 @@
                     </tr>`;
                 }
 
-                // 後台設定的刪除清單
                 if(listAdmin) {
                     const deleteBtn = `<button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button>`;
                     listAdmin.innerHTML += `<tr>
@@ -1016,9 +1023,6 @@
                 summaryList.innerHTML += `<tr style="${rowStyle}"><td style="font-weight: bold;">${name}</td><td>${data.total}</td><td style="font-weight: bold; font-size: 16px;">${available}</td><td style="color: #e74c3c;">${data.borrowed}</td><td style="color: #7f8c8d;">${alertQtyDisplay}</td><td>${lightHtml}</td></tr>`;
             }
         }
-
-        // 啟動時先載入資料並更新畫面
-        updateAllUI();
     </script>
 </body>
 </html>
