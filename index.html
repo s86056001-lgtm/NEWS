@@ -129,7 +129,7 @@
             <img src="https://images.unsplash.com/photo-1587289569733-4f938096f9c9?auto=format&fit=crop&w=800&q=80" alt="槽車3">
         </div>
         <div class="marquee-container">
-            <div class="marquee">⚠️ 隊長宣導：工安至上，嚴格遵守標準作業程序，確保行車與人員安全！ ⚠️</div>
+            <div class="marquee">⚠️ 隊長宣導：確實清點物品數量，要求愛惜物品！ ⚠️</div>
         </div>
         <div class="standby-row">
             <img src="https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=800&q=80" alt="槽車4">
@@ -321,7 +321,7 @@
                 this.history = [];
                 this.alerts = new Map();
                 
-                // 預設的 Google Apps Script 網址 (已更新為最新網址)
+                // 預設的 Google Apps Script 網址 (替換為您的最新網址)
                 const defaultUrl = "https://script.google.com/macros/s/AKfycbwFuuUpgK1FZOZv6eBGPxIzgVrkTWNubYKuLJwBj8pU-SF4K9SJm10iz7kRUQOJHX8IgQ/exec";
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || defaultUrl; 
                 
@@ -382,10 +382,9 @@
                 updateSyncStatusUI();
             }
 
-            // ================= Google Sheet API 修復區塊 =================
+            // ================= Google Sheet API 資料傳送 =================
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
-                // 修正重點：使用 text/plain 與 no-cors 避免跨域阻擋 (CORS)，確保資料可以送達 Apps Script
                 fetch(this.sheetUrl, {
                     method: 'POST', 
                     mode: 'no-cors',
