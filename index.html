@@ -133,6 +133,11 @@
                 <label>物品條碼：</label>
                 <input type="text" id="itemId" placeholder="請刷入或輸入物品條碼">
             </div>
+            <div class="form-group">
+                <label>借還數量：</label>
+                <input type="number" id="actionQty" value="1" min="1" style="width: 80px;">
+                <span style="font-size: 12px; color: #7f8c8d; margin-left: 10px;">(若該物品有多個庫存)</span>
+            </div>
             <div class="center-action">
                 <button class="btn-borrow" onclick="uiBorrow()">📤 借出登記</button>
                 <button class="btn-return" onclick="uiReturn()">📥 歸還登記</button>
@@ -191,6 +196,7 @@
 
                 <div class="card">
                     <h3>📦 庫存建檔與連動修改</h3>
+                    <p style="font-size:12px; color:#27ae60;">* 提示：若入庫數量大於 1，系統將自動為條碼加上 -1, -2 尾綴建檔。</p>
                     <div class="form-group">
                         <label>舊條碼:</label>
                         <input type="text" id="oldItemId" placeholder="若要修改請輸入舊條碼 (新增免填)">
@@ -291,7 +297,6 @@
                 this.cleanInactiveUsers(); 
             }
 
-            // 動態從歷史紀錄推算每項物品「現在被誰借走」
             rebuildState() {
                 this.items.forEach(item => item.borrowedBy = []);
                 for (let i = this.history.length - 1; i >= 0; i--) {
@@ -299,7 +304,8 @@
                     const item = this.items.get(log.itemId);
                     if (item) {
                         if (log.action === "借出") {
-                            if (!item.borrowedBy.includes(log.userId)) item.borrowedBy.push(log.userId);
+                            // 同一項物品可以借出多次，所以我們用 Array 來記 (不防呆重覆人，因為有可能一次借兩台)
+                            item.borrowedBy.push(log.userId);
                         } else if (log.action === "歸還") {
                             const idx = item.borrowedBy.indexOf(log.userId);
                             if (idx !== -1) item.borrowedBy.splice(idx, 1);
@@ -315,7 +321,6 @@
                 this.users.forEach(user => {
                     const lastActive = user.lastActive || now; 
                     if (now - lastActive > SIX_MONTHS_MS) {
-                        // 確認該人員是否還有借東西
                         const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowedBy.includes(user.id));
                         if (!hasBorrowed) toDelete.push(user.id);
                     } else if (!user.lastActive) { user.lastActive = now; needSave = true; }
@@ -335,7 +340,6 @@
                 fetch(this.sheetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dataPayload) });
             }
 
-            // 直接讀取 Google Sheet 資料庫 (自動按建檔順序)
             async loadFullStateFromCloud() {
                 if (!this.sheetUrl) return { success: false, msg: "❌ 未設定雲端網址" };
                 try {
@@ -348,7 +352,7 @@
                         this.history = data.history || [];
                         this.alerts.clear(); if(data.alerts) data.alerts.forEach(([n, q]) => this.alerts.set(n, q));
                         
-                        this.rebuildState(); // 重新計算外借狀態
+                        this.rebuildState();
                         this.saveLocalData();
                         return { success: true, msg: "✅ 成功載入雲端資料庫最新資料！" };
                     }
@@ -390,10 +394,19 @@
                 return { success: false, msg: `❌ 找不到人員資料。` };
             }
 
-            registerItem(itemObj) {
-                this.items.set(itemObj.id, itemObj);
+            // 🌟 核心修改：入庫支援自動切分編號
+            registerItem(baseId, name, qty) {
+                let successCount = 0;
+                for (let i = 0; i < qty; i++) {
+                    const id = qty > 1 ? `${baseId}-${i + 1}` : baseId;
+                    if (this.items.has(id)) continue; // 跳過重複的
+                    
+                    this.items.set(id, { id: id, name: name, qty: 1, borrowedBy: [] });
+                    this.sendToCloud({ action: "additem", id: id, name: name, qty: 1 });
+                    successCount++;
+                }
                 this.saveLocalData();
-                this.sendToCloud({ action: "additem", id: itemObj.id, name: itemObj.name, qty: itemObj.qty });
+                return successCount;
             }
 
             editItem(oldId, newId, newName, newQty) {
@@ -422,57 +435,80 @@
                 return { success: true, msg: `✅ 成功刪除庫存：${item.name} (${itemId})` };
             }
 
-            borrowItem(userId, itemId) {
+            // 🌟 借用邏輯：支援借用數量
+            borrowItem(userId, itemId, qty) {
                 const user = this.users.get(userId); const item = this.items.get(itemId);
                 if (!user) return { success: false, msg: `❌ 無效的人員編號！` };
                 if (!item) return { success: false, msg: `❌ 無效的物品條碼！` };
-                if (item.borrowedBy.includes(userId)) return { success: false, msg: `❌ 該人員已經借用了一個相同的物品！` };
-                if (item.borrowedBy.length >= item.qty) return { success: false, msg: `❌ 庫存不足，${item.qty} 個已全數借出！` };
+                
+                // 確認剩餘數量是否足夠
+                const availableToBorrow = item.qty - item.borrowedBy.length;
+                if (qty > availableToBorrow) {
+                    return { success: false, msg: `❌ 庫存不足！該條碼僅剩 ${availableToBorrow} 個可借。` };
+                }
 
                 user.lastActive = Date.now();
-                item.borrowedBy.push(user.id);
                 
-                // 警示檢查
+                // 警示檢查 (總庫存 - 總借出)
                 let total = 0, borrowed = 0;
                 this.items.forEach(i => { if(i.name === item.name){ total += i.qty; borrowed += i.borrowedBy.length; } });
                 const alertQty = this.alerts.get(item.name) || 0;
-                if (this.alerts.has(item.name) && (total - borrowed) < alertQty) {
-                     return { success: false, msg: `❌ 庫存警戒！剩餘數量低於安全值，禁止外借！` };
+                if (this.alerts.has(item.name) && (total - (borrowed + qty)) < alertQty) {
+                     return { success: false, msg: `❌ 庫存警戒！剩餘數量將低於安全值，禁止外借！` };
                 }
 
-                const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: item.id, itemName: item.name };
-                this.history.unshift(logData);
+                // 執行多次借出
+                for(let i=0; i<qty; i++) {
+                    item.borrowedBy.push(user.id);
+                    const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: item.id, itemName: item.name };
+                    this.history.unshift(logData);
+                    this.sendToCloud(logData);
+                }
+                
                 this.saveLocalData();
-                this.sendToCloud(logData);
-                return { success: true, msg: `✅ 成功借出 ${item.name}` };
+                return { success: true, msg: `✅ 成功借出 ${item.name} x${qty}` };
             }
             
-            returnItem(itemId, inputUserId) {
+            // 🌟 歸還邏輯：支援歸還數量
+            returnItem(itemId, inputUserId, qty) {
                 const item = this.items.get(itemId);
                 if (!item) return { success: false, msg: `❌ 找不到物品！` };
                 if (item.borrowedBy.length === 0) return { success: false, msg: `⚠️ 目前全數在庫，無需歸還。` };
 
                 let userId = inputUserId;
                 if (!userId) {
-                    if (item.borrowedBy.length === 1) {
-                        userId = item.borrowedBy[0];
+                    // 如果沒有填歸還人
+                    const uniqueBorrowers = [...new Set(item.borrowedBy)];
+                    if (uniqueBorrowers.length === 1) {
+                        userId = uniqueBorrowers[0]; // 只有一個人借，自動判斷是誰
                     } else {
-                        return { success: false, msg: `⚠️ 多人借用了此物品，請輸入【人員編號】以確認是誰歸還的！` };
+                        return { success: false, msg: `⚠️ 此物品由多人借用，請填寫【人員編號】以確認是誰歸還的！` };
                     }
                 } else if (!item.borrowedBy.includes(userId)) {
                     return { success: false, msg: `❌ 該人員並未借用此物品！` };
                 }
 
+                // 計算這個人借了幾個
+                let userBorrowedCount = 0;
+                item.borrowedBy.forEach(uid => { if(uid === userId) userBorrowedCount++; });
+                
+                if (qty > userBorrowedCount) {
+                    return { success: false, msg: `❌ 該人員僅借用了 ${userBorrowedCount} 個，無法歸還 ${qty} 個！` };
+                }
+
                 const user = this.users.get(userId);
                 if(user) user.lastActive = Date.now(); 
                 
-                item.borrowedBy.splice(item.borrowedBy.indexOf(userId), 1);
-                const logData = { action: "歸還", time: getFormattedDate(), userId: userId, userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
-                
-                this.history.unshift(logData);
+                // 執行多次歸還
+                for(let i=0; i<qty; i++) {
+                    item.borrowedBy.splice(item.borrowedBy.indexOf(userId), 1);
+                    const logData = { action: "歸還", time: getFormattedDate(), userId: userId, userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
+                    this.history.unshift(logData);
+                    this.sendToCloud(logData);
+                }
+
                 this.saveLocalData();
-                this.sendToCloud(logData);
-                return { success: true, msg: `✅ 歸還成功：${item.name}` };
+                return { success: true, msg: `✅ 歸還成功：${item.name} x${qty}` };
             }
 
             setAlert(name, qty) { this.alerts.set(name, parseInt(qty)); this.saveLocalData(); this.sendToCloud({ action: "setalert", name: name, qty: qty }); }
@@ -508,15 +544,17 @@
         }
 
         function uiBorrow() {
-            const res = system.borrowItem(document.getElementById('userId').value.trim(), document.getElementById('itemId').value.trim());
+            const qty = parseInt(document.getElementById('actionQty').value) || 1;
+            const res = system.borrowItem(document.getElementById('userId').value.trim(), document.getElementById('itemId').value.trim(), qty);
             showFeedback('actionFeedback', res.msg, res.success); 
-            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; }
+            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; document.getElementById('actionQty').value = '1'; }
         }
 
         function uiReturn() {
-            const res = system.returnItem(document.getElementById('itemId').value.trim(), document.getElementById('userId').value.trim());
+            const qty = parseInt(document.getElementById('actionQty').value) || 1;
+            const res = system.returnItem(document.getElementById('itemId').value.trim(), document.getElementById('userId').value.trim(), qty);
             showFeedback('actionFeedback', res.msg, res.success); 
-            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; }
+            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; document.getElementById('actionQty').value = '1'; }
         }
 
         function uiAddUser() {
@@ -534,9 +572,13 @@
             const name = document.getElementById('newItemName').value.trim();
             const qty = parseInt(document.getElementById('newItemQty').value) || 1;
             if(!id || !name) return showFeedback('itemFeedback', '❌ 條碼與名稱不可空白', false);
-            if(system.items.has(id)) return showFeedback('itemFeedback', '❌ 條碼已存在', false);
-            system.registerItem({ id, name, qty, borrowedBy: [] });
-            showFeedback('itemFeedback', '✅ 入庫成功', true); 
+            
+            const successCount = system.registerItem(id, name, qty);
+            if (successCount === qty) {
+                showFeedback('itemFeedback', `✅ 入庫成功：產生 ${successCount} 筆條碼`, true); 
+            } else {
+                showFeedback('itemFeedback', `⚠️ 入庫完成：產生 ${successCount} 筆 (有 ${qty - successCount} 筆重複跳過)`, false);
+            }
             document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = ''; document.getElementById('newItemQty').value = '1';
         }
 
