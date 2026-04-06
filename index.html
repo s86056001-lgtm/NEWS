@@ -11,9 +11,9 @@
         #screensaver {
             display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; 
             background-color: #000; flex-direction: column; justify-content: center; align-items: center; color: white;
-            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); 
+            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); /* 槽車事故示意圖 */
             background-size: cover; background-position: center; background-blend-mode: multiply; 
-            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); 
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); /* 讓文字清楚一點的暗化處理 */
             cursor: pointer;
         }
         #screensaver h1 { font-size: 5vw; margin: 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); letter-spacing: 2px; }
@@ -299,6 +299,7 @@
 
         function showScreensaver() {
             document.getElementById('screensaver').style.display = 'flex';
+            // 當進入待機，強制退回首頁導航
             document.getElementById('app-screen').style.display = 'none';
             document.getElementById('home-screen').style.display = 'flex';
         }
@@ -313,7 +314,7 @@
             document.onkeypress = resetIdleTimer;
             document.onclick = resetIdleTimer;
             
-            // 初始化確保 UI 載入
+            // 確保啟動時 UI 是最新的
             updateAllUI();
             resetIdleTimer();
         };
@@ -691,7 +692,6 @@
 
         function updateSyncStatusUI() {
             const statusEl = document.getElementById('syncStatus');
-            // 防呆確保元素存在
             if (!statusEl) return;
             
             if (system.sheetUrl) {
