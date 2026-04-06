@@ -34,21 +34,30 @@
         }
         .shortcut-btn:hover { background: white; color: #2c3e50; transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
 
-        /* 待機畫面 */
+        /* ================= 待機畫面 (自動適應螢幕排版) ================= */
         #standbyScreen {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #111; color: white; z-index: 9999; flex-direction: column; align-items: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #000; color: white; z-index: 9999; 
+            flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
+        }
+        .standby-row {
+            display: flex; justify-content: space-evenly; align-items: center; 
+            width: 100vw; height: 40vh; gap: 2vw; padding: 0 2vw; box-sizing: border-box;
+        }
+        .standby-row img {
+            width: 30vw; height: 35vh; object-fit: cover; border-radius: 1vw; border: 0.3vw solid #555;
+            box-shadow: 0 0 15px rgba(255,255,255,0.1);
+        }
+        .marquee-container {
+            width: 100vw; height: 12vh; display: flex; align-items: center; background: #e74c3c;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 10;
         }
         .marquee {
-            width: 100%; background: #e74c3c; color: white; font-size: 36px; font-weight: bold;
-            padding: 15px 0; text-align: center; letter-spacing: 2px;
+            width: 100%; color: white; font-size: 4vw; font-weight: bold; text-align: center; 
+            letter-spacing: 0.2vw; white-space: nowrap; text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
         }
-        .standby-photos {
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 20px; height: calc(100vh - 100px); overflow: hidden;
-        }
-        .standby-photos img { width: 45%; max-width: 600px; height: auto; object-fit: cover; border-radius: 10px; border: 3px solid #555; }
 
-        /* 主系統介面 */
+        /* ================= 主系統介面 ================= */
         #mainSystem { display: none; width: 100%; max-width: 1100px; margin: 0 auto; }
         .header { text-align: center; color: var(--dark); margin: 20px 0; position: relative; }
         .btn-home {
@@ -93,7 +102,6 @@
         .sync-off { background-color: #fadbd8; color: #c0392b; }
         .center-action { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
 
-        /* RWD */
         @media (max-width: 768px) {
             .grid-2 { grid-template-columns: 1fr; }
             .shortcut-btn { padding: 30px 40px; font-size: 24px; }
@@ -115,12 +123,18 @@
     </div>
 
     <div id="standbyScreen">
-        <div class="marquee">⚠️ 隊長宣導：工安至上，嚴格遵守標準作業程序，確保行車與人員安全！ ⚠️</div>
-        <div class="standby-photos">
-            <img src="https://images.unsplash.com/photo-1541887251347-1601662fb529?auto=format&fit=crop&w=800&q=80" alt="工安宣導照片1">
-            <img src="https://images.unsplash.com/photo-1621252179027-94459d278660?auto=format&fit=crop&w=800&q=80" alt="工安宣導照片2">
-            <img src="https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=800&q=80" alt="工安宣導照片3">
-            <img src="https://images.unsplash.com/photo-1581094288338-2314dddb7ece?auto=format&fit=crop&w=800&q=80" alt="工安宣導照片4">
+        <div class="standby-row">
+            <img src="https://images.unsplash.com/photo-1586145615714-275d31191599?auto=format&fit=crop&w=800&q=80" alt="槽車1">
+            <img src="https://images.unsplash.com/photo-1631520141679-0524cb51db68?auto=format&fit=crop&w=800&q=80" alt="槽車2">
+            <img src="https://images.unsplash.com/photo-1587289569733-4f938096f9c9?auto=format&fit=crop&w=800&q=80" alt="槽車3">
+        </div>
+        <div class="marquee-container">
+            <div class="marquee">⚠️ 隊長宣導：工安至上，嚴格遵守標準作業程序，確保行車與人員安全！ ⚠️</div>
+        </div>
+        <div class="standby-row">
+            <img src="https://images.unsplash.com/photo-1601362840469-51e4d8d58785?auto=format&fit=crop&w=800&q=80" alt="槽車4">
+            <img src="https://images.unsplash.com/photo-1616432328243-d3d63e9f4560?auto=format&fit=crop&w=800&q=80" alt="槽車5">
+            <img src="https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=800&q=80" alt="槽車6">
         </div>
     </div>
 
@@ -307,7 +321,7 @@
                 this.history = [];
                 this.alerts = new Map();
                 
-                // --- 寫死預設的 Google Apps Script 網址 ---
+                // 預設的 Google Apps Script 網址
                 const defaultUrl = "https://script.google.com/macros/s/AKfycbzQCQdrDx-HiwnTcNmxLE_lWgW9i8HMoI4H0EC8X8ACVT1_f0-chlVHZLgiXcsiqFqzbw/exec";
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || defaultUrl; 
                 
@@ -368,14 +382,20 @@
                 updateSyncStatusUI();
             }
 
+            // ================= Google Sheet API 修復區塊 =================
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
+                // 修正重點：使用 text/plain 與 no-cors 避免跨域阻擋 (CORS)，確保資料可以送達 Apps Script
                 fetch(this.sheetUrl, {
-                    method: 'POST', mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', 
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(dataPayload)
+                }).then(() => {
+                    console.log("背景同步已觸發");
                 }).catch(err => console.error("雲端同步失敗", err));
             }
+            // =========================================================
 
             addUser(name) {
                 const newId = String(this.users.size + 1); 
