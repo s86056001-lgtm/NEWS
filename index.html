@@ -127,7 +127,7 @@
             <h2>🔄 快速借還作業</h2>
             <div class="form-group">
                 <label>人員編號：</label>
-                <input type="text" id="userId" placeholder="請刷入或輸入人員編號">
+                <input type="text" id="userId" placeholder="請刷入或輸入人員編號 (歸還也可不填)">
             </div>
             <div class="form-group">
                 <label>物品條碼：</label>
@@ -139,7 +139,7 @@
             </div>
             <div id="actionFeedback" class="feedback"></div>
 
-            <h3>⚠️ 最近動態 (資料庫雙向連線同步)</h3>
+            <h3>⚠️ 最近動態 (雲端與本地雙向同步)</h3>
             <div class="scroll-container">
                 <table>
                     <thead><tr><th>動作</th><th>時間</th><th>物品條碼</th><th>物品名稱</th><th>人員編號</th><th>人員姓名</th></tr></thead>
@@ -170,7 +170,7 @@
                     <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存設定</button>
                     <button class="btn-sync" onclick="uiSyncFromCloud()">📥 同步雲端最新數據</button>
                 </div>
-                <p style="text-align:center; font-size:13px; color:#555;">💡 在其他電腦首次打開，或有人從試算表直接建檔後，請點擊【同步雲端最新數據】載入。</p>
+                <p style="text-align:center; font-size:13px; color:#555;">💡 若您直接在 Google 試算表中打字建檔，請點擊【同步雲端最新數據】立刻載入最新順序與資料！</p>
                 <div id="syncFeedback" class="feedback"></div>
             </div>
 
@@ -203,9 +203,13 @@
                         <label>物品名稱:</label>
                         <input type="text" id="newItemName" placeholder="輸入物品名稱">
                     </div>
+                    <div class="form-group">
+                        <label>入庫數量:</label>
+                        <input type="number" id="newItemQty" value="1" min="1" style="width: 80px;">
+                    </div>
                     <div class="center-action">
                         <button class="btn-add" onclick="uiAddItem()">➕ 新增入庫</button>
-                        <button class="btn-edit-act" onclick="uiEditItem()">✏️ 連動修改舊資料</button>
+                        <button class="btn-edit-act" onclick="uiEditItem()">✏️ 連動修改</button>
                     </div>
                     <div id="itemFeedback" class="feedback"></div>
                 </div>
@@ -226,10 +230,10 @@
 
                 <div class="card" style="border-color: #fadbd8; background: #fff5f5;">
                     <h3 style="border-left-color: var(--danger); color: var(--danger);">🗑️ 庫存清單與統一刪除區</h3>
-                    <p style="font-size:12px; color:#555;">所有庫存物品的刪除作業統一在此執行。</p>
+                    <p style="font-size:12px; color:#555;">(此處依照資料庫建檔順序排列)</p>
                     <div class="scroll-container" style="max-height: 250px;">
                         <table>
-                            <thead><tr><th>物品條碼</th><th>名稱</th><th>狀態</th><th>操作</th></tr></thead>
+                            <thead><tr><th>物品條碼</th><th>名稱</th><th>總數</th><th>狀態</th><th>操作</th></tr></thead>
                             <tbody id="adminInventoryList"></tbody>
                         </table>
                     </div>
@@ -280,10 +284,28 @@
                 const storedUsers = JSON.parse(localStorage.getItem('sys_users') || '[]');
                 this.history = JSON.parse(localStorage.getItem('sys_history') || '[]');
                 const storedAlerts = JSON.parse(localStorage.getItem('sys_alerts') || '[]');
-                storedItems.forEach(item => this.items.set(item.id, item));
-                storedUsers.forEach(user => this.users.set(user.id, user));
-                storedAlerts.forEach(([name, qty]) => this.alerts.set(name, qty));
+                
+                this.items.clear(); storedItems.forEach(item => this.items.set(item.id, { ...item, borrowedBy: item.borrowedBy || [] }));
+                this.users.clear(); storedUsers.forEach(user => this.users.set(user.id, user));
+                this.alerts.clear(); storedAlerts.forEach(([name, qty]) => this.alerts.set(name, qty));
                 this.cleanInactiveUsers(); 
+            }
+
+            // 動態從歷史紀錄推算每項物品「現在被誰借走」
+            rebuildState() {
+                this.items.forEach(item => item.borrowedBy = []);
+                for (let i = this.history.length - 1; i >= 0; i--) {
+                    const log = this.history[i];
+                    const item = this.items.get(log.itemId);
+                    if (item) {
+                        if (log.action === "借出") {
+                            if (!item.borrowedBy.includes(log.userId)) item.borrowedBy.push(log.userId);
+                        } else if (log.action === "歸還") {
+                            const idx = item.borrowedBy.indexOf(log.userId);
+                            if (idx !== -1) item.borrowedBy.splice(idx, 1);
+                        }
+                    }
+                }
             }
 
             cleanInactiveUsers() {
@@ -293,7 +315,8 @@
                 this.users.forEach(user => {
                     const lastActive = user.lastActive || now; 
                     if (now - lastActive > SIX_MONTHS_MS) {
-                        const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowerId === user.id);
+                        // 確認該人員是否還有借東西
+                        const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowedBy.includes(user.id));
                         if (!hasBorrowed) toDelete.push(user.id);
                     } else if (!user.lastActive) { user.lastActive = now; needSave = true; }
                 });
@@ -306,55 +329,58 @@
 
             setSheetUrl(url) { this.sheetUrl = url; localStorage.setItem('sys_sheet_url', url); updateSyncStatusUI(); }
 
-            // ================= 真・雙向雲端同步模組 =================
+            // ================= Google Sheet 雙向同步核心 =================
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
                 fetch(this.sheetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dataPayload) });
             }
 
-            // 下載試算表最新資料，並強制本地端覆寫
+            // 直接讀取 Google Sheet 資料庫 (自動按建檔順序)
             async loadFullStateFromCloud() {
                 if (!this.sheetUrl) return { success: false, msg: "❌ 未設定雲端網址" };
                 try {
                     const response = await fetch(this.sheetUrl);
                     const data = await response.json();
                     
-                    if (data) {
-                        this.items.clear(); data.items.forEach(i => this.items.set(i.id, i));
+                    if (data && data.items) {
+                        this.items.clear(); data.items.forEach(i => this.items.set(i.id, { ...i, borrowedBy: [] }));
                         this.users.clear(); data.users.forEach(u => this.users.set(u.id, u));
                         this.history = data.history || [];
                         this.alerts.clear(); if(data.alerts) data.alerts.forEach(([n, q]) => this.alerts.set(n, q));
+                        
+                        this.rebuildState(); // 重新計算外借狀態
                         this.saveLocalData();
-                        return { success: true, msg: "✅ 成功載入雲端/資料庫最新資料！" };
+                        return { success: true, msg: "✅ 成功載入雲端資料庫最新資料！" };
                     }
                     return { success: false, msg: "⚠️ 資料格式異常" };
                 } catch(err) {
-                    return { success: false, msg: "❌ 同步失敗，請確認網路連線或 Apps Script 部署" };
+                    return { success: false, msg: "❌ 同步失敗，請確認網路或試算表代碼是否已更新" };
                 }
             }
 
-            // ================= 動作模組 (先改本地，再送雲端) =================
+            // ================= 動作模組 =================
             addUser(name) {
                 const newId = String(this.users.size + 1); 
                 const newUser = { id: newId, name: name, lastActive: Date.now() };
                 this.users.set(newId, newUser);
                 this.saveLocalData();
-                this.sendToCloud({ action: "adduser", name: name }); // 雲端會自動用列數排編號
-                setTimeout(() => { this.loadFullStateFromCloud(); }, 1500); // 新增完後一秒刷新排序
+                this.sendToCloud({ action: "adduser", id: newId, name: name }); 
                 return newId;
             }
 
             reindexUsers() {
                 const oldUsers = Array.from(this.users.values()); this.users.clear(); const idMapping = {}; 
                 oldUsers.forEach((user, index) => { const newId = String(index + 1); idMapping[user.id] = newId; user.id = newId; this.users.set(newId, user); });
-                this.items.forEach(item => { if (item.borrowerId && idMapping[item.borrowerId]) item.borrowerId = idMapping[item.borrowerId]; });
+                this.items.forEach(item => {
+                    item.borrowedBy = item.borrowedBy.map(uid => idMapping[uid] ? idMapping[uid] : uid);
+                });
                 this.history.forEach(log => { if (idMapping[log.userId]) log.userId = idMapping[log.userId]; });
                 this.saveLocalData();
             }
 
             deleteUser(userId) {
-                const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowerId === userId);
-                if (hasBorrowed) return { success: false, msg: `❌ 無法刪除：尚有未歸還物品！` };
+                const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowedBy.includes(userId));
+                if (hasBorrowed) return { success: false, msg: `❌ 無法刪除：該人員尚有未歸還物品！` };
                 if (this.users.has(userId)) {
                     this.users.delete(userId);
                     this.reindexUsers(); 
@@ -367,47 +393,53 @@
             registerItem(itemObj) {
                 this.items.set(itemObj.id, itemObj);
                 this.saveLocalData();
-                this.sendToCloud({ action: "additem", id: itemObj.id, name: itemObj.name });
+                this.sendToCloud({ action: "additem", id: itemObj.id, name: itemObj.name, qty: itemObj.qty });
             }
 
-            editItem(oldId, newId, newName) {
+            editItem(oldId, newId, newName, newQty) {
                 if (!this.items.has(oldId)) return { success: false, msg: `❌ 找不到舊條碼 [${oldId}]。` };
                 if (oldId !== newId && this.items.has(newId)) return { success: false, msg: `❌ 新條碼 [${newId}] 已存在！` };
 
                 const item = this.items.get(oldId);
                 this.history.forEach(log => { if (log.itemId === oldId) { log.itemId = newId; log.itemName = newName; } });
                 if (oldId !== newId) this.items.delete(oldId);
-                item.id = newId; item.name = newName; this.items.set(newId, item);
+                
+                item.id = newId; item.name = newName; item.qty = newQty; 
+                this.items.set(newId, item);
                 
                 this.saveLocalData();
-                this.sendToCloud({ action: "edititem", old: oldId, id: newId, name: newName });
-                return { success: true, msg: `✅ 連動更新完成：[${newId}] ${newName}` };
+                this.sendToCloud({ action: "edititem", old: oldId, id: newId, name: newName, qty: newQty });
+                return { success: true, msg: `✅ 連動更新完成：[${newId}] ${newName} (共 ${newQty} 個)` };
             }
 
             deleteItem(itemId) {
                 const item = this.items.get(itemId);
                 if (!item) return { success: false, msg: `❌ 找不到該物品。` };
-                if (item.isBorrowed) return { success: false, msg: `❌ 外借中無法刪除！` };
+                if (item.borrowedBy.length > 0) return { success: false, msg: `❌ 無法刪除：尚有 ${item.borrowedBy.length} 個外借中！` };
                 this.items.delete(itemId);
                 this.saveLocalData();
                 this.sendToCloud({ action: "deleteitem", id: itemId });
-                return { success: true, msg: `✅ 成功刪除：${item.name} (${itemId})` };
+                return { success: true, msg: `✅ 成功刪除庫存：${item.name} (${itemId})` };
             }
 
             borrowItem(userId, itemId) {
                 const user = this.users.get(userId); const item = this.items.get(itemId);
                 if (!user) return { success: false, msg: `❌ 無效的人員編號！` };
                 if (!item) return { success: false, msg: `❌ 無效的物品條碼！` };
-                if (item.isBorrowed) return { success: false, msg: `❌ 物品已外借！` };
+                if (item.borrowedBy.includes(userId)) return { success: false, msg: `❌ 該人員已經借用了一個相同的物品！` };
+                if (item.borrowedBy.length >= item.qty) return { success: false, msg: `❌ 庫存不足，${item.qty} 個已全數借出！` };
 
                 user.lastActive = Date.now();
+                item.borrowedBy.push(user.id);
+                
+                // 警示檢查
                 let total = 0, borrowed = 0;
-                this.items.forEach(i => { if(i.name === item.name){ total++; if(i.isBorrowed) borrowed++; } });
-                const available = total - borrowed;
+                this.items.forEach(i => { if(i.name === item.name){ total += i.qty; borrowed += i.borrowedBy.length; } });
                 const alertQty = this.alerts.get(item.name) || 0;
-                if (this.alerts.has(item.name) && available <= alertQty) return { success: false, msg: `❌ 庫存警戒！已達最低安全值！` };
+                if (this.alerts.has(item.name) && (total - borrowed) < alertQty) {
+                     return { success: false, msg: `❌ 庫存警戒！剩餘數量低於安全值，禁止外借！` };
+                }
 
-                item.isBorrowed = true; item.borrowerId = user.id;
                 const logData = { action: "借出", time: getFormattedDate(), userId: user.id, userName: user.name, itemId: item.id, itemName: item.name };
                 this.history.unshift(logData);
                 this.saveLocalData();
@@ -415,17 +447,29 @@
                 return { success: true, msg: `✅ 成功借出 ${item.name}` };
             }
             
-            returnItem(itemId) {
+            returnItem(itemId, inputUserId) {
                 const item = this.items.get(itemId);
                 if (!item) return { success: false, msg: `❌ 找不到物品！` };
-                if (!item.isBorrowed) return { success: false, msg: `⚠️ 目前在庫，無需歸還。` };
+                if (item.borrowedBy.length === 0) return { success: false, msg: `⚠️ 目前全數在庫，無需歸還。` };
 
-                const user = this.users.get(item.borrowerId);
+                let userId = inputUserId;
+                if (!userId) {
+                    if (item.borrowedBy.length === 1) {
+                        userId = item.borrowedBy[0];
+                    } else {
+                        return { success: false, msg: `⚠️ 多人借用了此物品，請輸入【人員編號】以確認是誰歸還的！` };
+                    }
+                } else if (!item.borrowedBy.includes(userId)) {
+                    return { success: false, msg: `❌ 該人員並未借用此物品！` };
+                }
+
+                const user = this.users.get(userId);
                 if(user) user.lastActive = Date.now(); 
-                item.isBorrowed = false; 
-                const logData = { action: "歸還", time: getFormattedDate(), userId: user?user.id:"未知", userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
                 
-                item.borrowerId = null; this.history.unshift(logData);
+                item.borrowedBy.splice(item.borrowedBy.indexOf(userId), 1);
+                const logData = { action: "歸還", time: getFormattedDate(), userId: userId, userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
+                
+                this.history.unshift(logData);
                 this.saveLocalData();
                 this.sendToCloud(logData);
                 return { success: true, msg: `✅ 歸還成功：${item.name}` };
@@ -452,12 +496,12 @@
         function uiSetSheetUrl() {
             const url = document.getElementById('sheetUrl').value.trim();
             if(!url) return showFeedback('syncFeedback', '❌ 請輸入網址', false);
-            system.setSheetUrl(url); showFeedback('syncFeedback', '✅ 同步連線已啟動', true);
+            system.setSheetUrl(url); showFeedback('syncFeedback', '✅ 設定已儲存', true);
         }
 
         async function uiSyncFromCloud() {
             const btn = document.querySelector('.btn-sync');
-            btn.textContent = "⏳ 資料同步中..."; btn.disabled = true;
+            btn.textContent = "⏳ 資料庫同步中..."; btn.disabled = true;
             const res = await system.loadFullStateFromCloud();
             showFeedback('syncFeedback', res.msg, res.success);
             btn.textContent = "📥 同步雲端最新數據"; btn.disabled = false;
@@ -465,37 +509,45 @@
 
         function uiBorrow() {
             const res = system.borrowItem(document.getElementById('userId').value.trim(), document.getElementById('itemId').value.trim());
-            showFeedback('actionFeedback', res.msg, res.success); document.getElementById('itemId').value = ''; 
+            showFeedback('actionFeedback', res.msg, res.success); 
+            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; }
         }
 
         function uiReturn() {
-            const res = system.returnItem(document.getElementById('itemId').value.trim());
-            showFeedback('actionFeedback', res.msg, res.success); document.getElementById('itemId').value = ''; 
+            const res = system.returnItem(document.getElementById('itemId').value.trim(), document.getElementById('userId').value.trim());
+            showFeedback('actionFeedback', res.msg, res.success); 
+            if(res.success) { document.getElementById('itemId').value = ''; document.getElementById('userId').value = ''; }
         }
 
         function uiAddUser() {
             const name = document.getElementById('newUserName').value.trim();
             if(!name) return showFeedback('userFeedback', '❌ 姓名空白', false);
             const id = system.addUser(name);
-            showFeedback('userFeedback', `✅ 處理中，已發送至雲端...`, true);
+            showFeedback('userFeedback', `✅ 新增人員：${name} (編號:${id})`, true);
             document.getElementById('newUserName').value = '';
         }
 
         function uiDeleteUser(id) { if(!confirm(`⚠️ 刪除人員將重新排列編號，確定刪除？`)) return; alert(system.deleteUser(id).msg); }
         
         function uiAddItem() {
-            const id = document.getElementById('newItemId').value.trim(); const name = document.getElementById('newItemName').value.trim();
-            if(!id || !name) return showFeedback('itemFeedback', '❌ 新條碼與名稱不可空白', false);
+            const id = document.getElementById('newItemId').value.trim(); 
+            const name = document.getElementById('newItemName').value.trim();
+            const qty = parseInt(document.getElementById('newItemQty').value) || 1;
+            if(!id || !name) return showFeedback('itemFeedback', '❌ 條碼與名稱不可空白', false);
             if(system.items.has(id)) return showFeedback('itemFeedback', '❌ 條碼已存在', false);
-            system.registerItem({ id, name, isBorrowed: false, borrowerId: null });
-            showFeedback('itemFeedback', '✅ 入庫成功', true); document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = '';
+            system.registerItem({ id, name, qty, borrowedBy: [] });
+            showFeedback('itemFeedback', '✅ 入庫成功', true); 
+            document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = ''; document.getElementById('newItemQty').value = '1';
         }
 
         function uiEditItem() {
-            const oldId = document.getElementById('oldItemId').value.trim(); const newId = document.getElementById('newItemId').value.trim(); const newName = document.getElementById('newItemName').value.trim();
+            const oldId = document.getElementById('oldItemId').value.trim(); 
+            const newId = document.getElementById('newItemId').value.trim(); 
+            const newName = document.getElementById('newItemName').value.trim();
+            const newQty = parseInt(document.getElementById('newItemQty').value) || 1;
             if(!oldId || !newId || !newName) return showFeedback('itemFeedback', '❌ 請填寫完整新舊資料', false);
-            const res = system.editItem(oldId, newId, newName); showFeedback('itemFeedback', res.msg, res.success);
-            if(res.success){ document.getElementById('oldItemId').value = ''; document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = ''; }
+            const res = system.editItem(oldId, newId, newName, newQty); showFeedback('itemFeedback', res.msg, res.success);
+            if(res.success){ document.getElementById('oldItemId').value = ''; document.getElementById('newItemId').value = ''; document.getElementById('newItemName').value = ''; document.getElementById('newItemQty').value = '1';}
         }
 
         function uiDeleteItem(id) { if(!confirm(`⚠️ 確定從庫存中移除？`)) return; alert(system.deleteItem(id).msg); }
@@ -541,10 +593,14 @@
 
             system.items.forEach(item => {
                 if (!sumData[item.name]) sumData[item.name] = { t: 0, b: 0 };
-                sumData[item.name].t++; if(item.isBorrowed) sumData[item.name].b++;
+                sumData[item.name].t += item.qty; 
+                sumData[item.name].b += item.borrowedBy.length;
 
-                const stat = item.isBorrowed ? `<span style="color:var(--danger)">外借中</span>` : `<span style="color:var(--success)">在庫</span>`;
-                aList.innerHTML += `<tr><td>${item.id}</td><td>${item.name}</td><td>${stat}</td><td><button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button></td></tr>`;
+                const avail = item.qty - item.borrowedBy.length;
+                let statHtml = item.borrowedBy.length > 0 ? `<span style="color:var(--warning)">外借中(${item.borrowedBy.length})</span>` : `<span style="color:var(--success)">全數在庫</span>`;
+                if (avail === 0) statHtml = `<span style="color:var(--danger)">全數借出</span>`;
+
+                aList.innerHTML += `<tr><td>${item.id}</td><td>${item.name}</td><td>${item.qty}</td><td>${statHtml}</td><td><button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button></td></tr>`;
             });
 
             for (const [name, d] of Object.entries(sumData)) {
