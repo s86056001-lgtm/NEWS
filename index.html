@@ -174,7 +174,7 @@
                 <h3>☁️ 連接 Google 表單/試算表</h3>
                 <div class="form-group">
                     <label>Web App 網址:</label>
-                    <input type="password" id="sheetUrl" placeholder="請貼上 Apps Script 網址啟動自動同步" style="width: 50%;">
+                    <input type="password" id="sheetUrl" placeholder="已自動配置預設網址" style="width: 50%;">
                     <button class="btn-setting" onclick="uiSetSheetUrl()">🔗 儲存並連線</button>
                 </div>
                 <div id="syncFeedback" class="feedback"></div>
@@ -257,7 +257,6 @@
             }
         }
 
-        // 偵測所有動作以重置時間
         window.onload = resetIdleTimer;
         document.onmousemove = resetIdleTimer;
         document.onkeypress = resetIdleTimer;
@@ -266,7 +265,7 @@
 
         setInterval(() => {
             idleTime++;
-            if (idleTime >= 30 && !standbyMode) { // 30秒進入待機
+            if (idleTime >= 30 && !standbyMode) { 
                 document.getElementById('standbyScreen').style.display = 'flex';
                 standbyMode = true;
             }
@@ -307,7 +306,11 @@
                 this.users = new Map();
                 this.history = [];
                 this.alerts = new Map();
-                this.sheetUrl = localStorage.getItem('sys_sheet_url') || ""; 
+                
+                // --- 寫死預設的 Google Apps Script 網址 ---
+                const defaultUrl = "https://script.google.com/macros/s/AKfycbzQCQdrDx-HiwnTcNmxLE_lWgW9i8HMoI4H0EC8X8ACVT1_f0-chlVHZLgiXcsiqFqzbw/exec";
+                this.sheetUrl = localStorage.getItem('sys_sheet_url') || defaultUrl; 
+                
                 this.loadData();
             }
 
@@ -329,10 +332,9 @@
                 storedUsers.forEach(user => this.users.set(user.id, user));
                 storedAlerts.forEach(([name, qty]) => this.alerts.set(name, qty));
 
-                this.cleanInactiveUsers(); // 載入時自動清理 6 個月無活動者
+                this.cleanInactiveUsers(); 
             }
 
-            // 6個月自動移除機制
             cleanInactiveUsers() {
                 const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
                 const now = Date.now();
@@ -340,9 +342,8 @@
 
                 const toDelete = [];
                 this.users.forEach(user => {
-                    const lastActive = user.lastActive || now; // 若無紀錄視同現在
+                    const lastActive = user.lastActive || now; 
                     if (now - lastActive > SIX_MONTHS_MS) {
-                        // 確認有無未歸還物品
                         const hasBorrowed = Array.from(this.items.values()).some(item => item.borrowerId === user.id);
                         if (!hasBorrowed) toDelete.push(user.id);
                     } else if (!user.lastActive) {
@@ -369,7 +370,6 @@
 
             sendToCloud(dataPayload) {
                 if (!this.sheetUrl) return; 
-                // 將資料發送至 Google Form / Sheet Apps Script
                 fetch(this.sheetUrl, {
                     method: 'POST', mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
@@ -424,7 +424,6 @@
                 this.saveData();
             }
 
-            // 連動修改物品與紀錄
             editItem(oldId, newId, newName) {
                 if (!this.items.has(oldId)) return { success: false, msg: `❌ 找不到舊條碼 [${oldId}]。` };
                 if (oldId !== newId && this.items.has(newId)) return { success: false, msg: `❌ 新條碼 [${newId}] 已存在！` };
@@ -460,10 +459,8 @@
                 if (!item) return { success: false, msg: `❌ 無效的物品條碼！` };
                 if (item.isBorrowed) return { success: false, msg: `❌ 物品已外借！` };
 
-                // 更新活動時間
                 user.lastActive = Date.now();
 
-                // 檢查警示
                 let total = 0, borrowed = 0;
                 this.items.forEach(i => { if(i.name === item.name){ total++; if(i.isBorrowed) borrowed++; } });
                 const available = total - borrowed;
@@ -487,7 +484,7 @@
                 if (!item.isBorrowed) return { success: false, msg: `⚠️ 目前在庫，無需歸還。` };
 
                 const user = this.users.get(item.borrowerId);
-                if(user) user.lastActive = Date.now(); // 更新活動時間
+                if(user) user.lastActive = Date.now(); 
 
                 item.isBorrowed = false; 
                 const logData = { action: "歸還", time: getFormattedDate(), userId: user?user.id:"未知", userName: user?user.name:"未知", itemId: item.id, itemName: item.name };
@@ -619,11 +616,9 @@
             const sumData = {};
 
             system.items.forEach(item => {
-                // 處理總表資料
                 if (!sumData[item.name]) sumData[item.name] = { t: 0, b: 0 };
                 sumData[item.name].t++; if(item.isBorrowed) sumData[item.name].b++;
 
-                // 處理系統設定的統一刪除區
                 const stat = item.isBorrowed ? `<span style="color:var(--danger)">外借中</span>` : `<span style="color:var(--success)">在庫</span>`;
                 aList.innerHTML += `<tr><td>${item.id}</td><td>${item.name}</td><td>${stat}</td>
                 <td><button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button></td></tr>`;
