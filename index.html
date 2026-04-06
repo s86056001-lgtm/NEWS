@@ -5,42 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能雲端借還管理系統</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
         
+        /* 待機畫面 (Screensaver) */
+        #screensaver {
+            display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; 
+            background-color: #000; flex-direction: column; justify-content: center; align-items: center; color: white;
+            background-image: url('https://images.unsplash.com/photo-1621252179027-94459d278660?q=80&w=2070&auto=format&fit=crop'); /* 槽車事故示意圖 */
+            background-size: cover; background-position: center; background-blend-mode: multiply; 
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.6); /* 讓文字清楚一點的暗化處理 */
+            cursor: pointer;
+        }
+        #screensaver h1 { font-size: 5vw; margin: 0; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); letter-spacing: 2px; }
+        #screensaver p { font-size: 2vw; margin-top: 20px; animation: blink 2s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+
+        /* 密碼輸入框 Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background-color: #fff; padding: 30px; border-radius: 8px; text-align: center; width: 350px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);}
+        .modal-content input { width: 80%; margin: 15px 0; text-align: center; padding: 10px; font-size:16px;}
+        .modal-content h3 { margin-top:0; color: #e74c3c; }
+
         /* 首頁快捷鍵區域 */
-        #home-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #2c3e50, #3498db); color: white; }
-        .home-title { font-size: 3vw; margin-bottom: 50px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-        .shortcut-container { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; }
+        #home-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d); color: white; }
+        .home-title { font-size: 4vw; margin-bottom: 8vh; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); letter-spacing: 2px; }
+        .shortcut-container { display: flex; gap: 4vw; flex-wrap: wrap; justify-content: center; width: 90%; }
         .shortcut-btn { 
-            width: 250px; height: 150px; border-radius: 15px; border: none; cursor: pointer; 
-            font-size: 24px; font-weight: bold; color: #2c3e50; background-color: #fff;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2); transition: transform 0.2s, box-shadow 0.2s;
+            width: 22vw; min-width: 250px; height: 25vh; min-height: 180px; border-radius: 20px; border: none; cursor: pointer; 
+            font-size: 2vw; font-weight: bold; color: #2c3e50; background-color: rgba(255,255,255,0.95);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: transform 0.2s, box-shadow 0.2s;
             display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
         }
-        .shortcut-btn:hover { transform: translateY(-5px); box-shadow: 0 15px 25px rgba(0,0,0,0.3); }
-        .shortcut-icon { font-size: 50px; }
+        .shortcut-btn:hover { transform: translateY(-8px); box-shadow: 0 15px 35px rgba(0,0,0,0.4); background-color: #fff;}
+        .shortcut-icon { font-size: 5vw; }
 
         /* 系統主要區域 */
-        #app-screen { display: none; max-width: 1100px; margin: 0 auto; padding: 20px; width: 100%; box-sizing: border-box; }
+        #app-screen { display: none; max-width: 1200px; margin: 0 auto; padding: 20px; width: 100%; box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #ccc; padding-bottom: 10px;}
         .header h1 { margin: 0; color: #2c3e50; font-size: 24px; }
-        .btn-home { background-color: #7f8c8d; padding: 8px 15px; font-size: 14px; border-radius: 4px; color: white; border: none; cursor: pointer; }
-        .btn-home:hover { background-color: #95a5a6; }
-
-        .tabs { display: flex; margin-bottom: 20px; }
-        .tab-btn { padding: 12px 24px; cursor: pointer; border: none; background: #e0e0e0; font-size: 16px; font-weight: bold; border-radius: 8px 8px 0 0; margin-right: 5px; color: #555; transition: 0.3s; }
-        .tab-btn:hover { background: #d5d5d5; }
-        .tab-btn.active { background: #fff; color: #2980b9; border: 2px solid #ccc; border-bottom: none; margin-bottom: -2px; }
         
-        .tab-content { display: none; background-color: #fff; padding: 25px; border-radius: 0 8px 8px 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-home { background-color: #7f8c8d; padding: 8px 15px; font-size: 14px; border-radius: 4px; color: white; border: none; cursor: pointer; font-weight:bold;}
+        .btn-home:hover { background-color: #95a5a6; }
+        
+        .tab-content { display: none; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); animation: fadeIn 0.3s;}
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .tab-content.active { display: block; }
 
         h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
         h3 { color: #34495e; margin-top: 20px; border-left: 4px solid #3498db; padding-left: 10px; font-size: 16px;}
         .form-group { margin-bottom: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;}
         label { width: 110px; font-weight: bold; }
-        input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px; }
-        input[type="number"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 80px; }
+        input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 220px; font-size: 14px;}
+        input[type="number"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 80px; font-size: 14px;}
         
         button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; color: white; font-weight: bold; transition: 0.2s; }
         .btn-borrow { background-color: #3498db; } .btn-borrow:hover { background-color: #2980b9; }
@@ -50,7 +66,7 @@
         .btn-setting { background-color: #8e44ad; padding: 10px 15px; font-size: 14px; margin: 0; } .btn-setting:hover { background-color: #732d91; }
         .btn-edit-act { background-color: #f39c12; padding: 10px 20px; margin-left: 10px; } .btn-edit-act:hover { background-color: #d68910; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;}
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #f8f9fa; color: #2c3e50; font-weight: bold;}
         .scroll-container { max-height: 400px; overflow-y: auto; margin-top: 10px; border: 1px solid #eee; border-radius: 4px;}
@@ -66,23 +82,30 @@
         #syncStatus { float: right; font-size: 14px; padding: 5px 10px; border-radius: 4px; margin-top: -45px; font-weight: bold;}
         .sync-on { background-color: #d5f5e3; color: #1e8449; }
         .sync-off { background-color: #fadbd8; color: #c0392b; }
-
-        /* Modal 樣式 */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
-        .modal-content { background-color: #fff; padding: 30px; border-radius: 8px; text-align: center; width: 300px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);}
-        .modal-content input { width: 80%; margin: 15px 0; text-align: center;}
     </style>
 </head>
 <body>
 
+    <div id="screensaver" onclick="wakeUp()">
+        <h1>⚠️ 工安宣導 ⚠️</h1>
+        <h2 style="color: #f39c12; font-size:3vw;">請隨時注意槽車作業安全，落實SOP</h2>
+        <p>點擊螢幕任意處喚醒系統</p>
+    </div>
+
     <div id="passwordModal" class="modal">
         <div class="modal-content">
-            <h3 style="margin-top: 0; color: #e74c3c;">🔒 管理者權限驗證</h3>
-            <p style="font-size: 14px; color: #555;">執行刪除動作需輸入密碼</p>
+            <h3>🔒 管理者權限驗證</h3>
+            <p id="pwdPromptText" style="font-size: 14px; color: #555;">請輸入管理者密碼以執行操作</p>
             <input type="password" id="adminPwd" placeholder="請輸入密碼">
+            
+            <div id="pwdChangeArea" style="display:none;">
+                <p style="font-size: 14px; color: #c0392b; font-weight:bold;">您已超過三個月未變更密碼，請立即更新！</p>
+                <input type="password" id="newAdminPwd" placeholder="請輸入『新』密碼 (不可與舊密碼相同)">
+            </div>
+
             <div style="margin-top: 15px;">
                 <button class="btn-home" onclick="closeModal()">取消</button>
-                <button class="btn-borrow" onclick="verifyPassword()">確認執行</button>
+                <button class="btn-borrow" onclick="verifyPassword()">確認送出</button>
             </div>
         </div>
     </div>
@@ -92,29 +115,23 @@
         <div class="shortcut-container">
             <button class="shortcut-btn" onclick="enterSystem('tab-front')">
                 <span class="shortcut-icon">🔄</span>
-                快速借還作業
+                快速作業
             </button>
             <button class="shortcut-btn" onclick="enterSystem('tab-inventory')">
                 <span class="shortcut-icon">📋</span>
-                庫存總表查詢
+                庫存總表
             </button>
-            <button class="shortcut-btn" onclick="enterSystem('tab-admin')">
+            <button class="shortcut-btn" onclick="enterSystem('tab-admin', true)">
                 <span class="shortcut-icon">⚙️</span>
-                系統後台設定
+                系統設定
             </button>
         </div>
     </div>
 
     <div id="app-screen">
         <div class="header">
-            <h1>📦 智能雲端自動借還系統</h1>
-            <button class="btn-home" onclick="backToHome()">🏠 回首頁</button>
-        </div>
-
-        <div class="tabs">
-            <button class="tab-btn" id="btn-tab-front" onclick="switchTab('tab-front')">🔄 快速作業</button>
-            <button class="tab-btn" id="btn-tab-inventory" onclick="switchTab('tab-inventory')">📋 庫存總表</button>
-            <button class="tab-btn" id="btn-tab-admin" onclick="switchTab('tab-admin')">⚙️ 系統設定</button>
+            <h1 id="screenTitle">系統區塊</h1>
+            <button class="btn-home" onclick="backToHome()">🏠 回首頁導航</button>
         </div>
 
         <div id="tab-front" class="tab-content">
@@ -176,10 +193,9 @@
                             <th>物品名稱</th>
                             <th>目前狀態</th>
                             <th>借用人資訊</th>
-                            <th>操作管理</th>
                         </tr>
                     </thead>
-                    <tbody id="inventoryList"></tbody>
+                    <tbody id="inventoryListReadOnly"></tbody>
                 </table>
             </div>
         </div>
@@ -210,39 +226,38 @@
             </div>
 
             <div class="grid-2">
-                <div class="card">
-                    <h2>👥 人員自動註冊與名單</h2>
-                    <div class="form-group">
-                        <label style="width: 80px;">人員編號:</label>
-                        <span class="auto-gen-text">系統依序自動產生 (從 1 開始)</span>
-                    </div>
-                    <div class="form-group">
-                        <label style="width: 80px;">人員姓名:</label>
-                        <input type="text" id="newUserName" placeholder="例如: 陳經理">
-                    </div>
-                    <button class="btn-add" onclick="uiAddUser()">➕ 新增人員</button>
-                    <div id="userFeedback" class="feedback"></div>
+                <div style="display:flex; flex-direction:column; gap:20px;">
+                    <div class="card">
+                        <h2>👥 人員自動註冊與名單</h2>
+                        <div class="form-group"><label style="width: 80px;">人員編號:</label><span class="auto-gen-text">系統依序自動產生 (從 1 開始)</span></div>
+                        <div class="form-group"><label style="width: 80px;">人員姓名:</label><input type="text" id="newUserName" placeholder="例如: 陳經理"></div>
+                        <button class="btn-add" onclick="uiAddUser()">➕ 新增人員</button>
+                        <div id="userFeedback" class="feedback"></div>
 
-                    <h3 style="margin-top: 20px; font-size: 16px;">📜 人員清單與停權狀態</h3>
-                    <div class="scroll-container" style="max-height: 250px;">
-                        <table><thead><tr><th>編號</th><th>姓名</th><th>停權狀態</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
+                        <h3 style="margin-top: 20px; font-size: 16px;">📜 人員清單與停權狀態</h3>
+                        <div class="scroll-container" style="max-height: 250px;">
+                            <table><thead><tr><th>編號</th><th>姓名</th><th>停權狀態</th><th>操作</th></tr></thead><tbody id="userList"></tbody></table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2 style="border-bottom-color:#f39c12;">⚠️ 安全庫存警示設定</h2>
+                        <div class="form-group"><label style="width: 80px;">警示品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
+                        <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px; background-color: #f39c12;" onclick="uiSetAlert()">新增 / 修改</button></div>
+                        <div id="alertFeedback" class="feedback"></div>
+
+                        <h3>📜 目前設定清單</h3>
+                        <div class="scroll-container" style="max-height: 150px;">
+                            <table><thead><tr><th>警示品名</th><th>警戒數量</th><th>操作</th></tr></thead><tbody id="alertList"></tbody></table>
+                        </div>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h2>📦 物品管理 (入庫 / 修改)</h2>
-                    <div class="form-group">
-                        <label style="width: 80px;">舊條碼:</label>
-                        <input type="text" id="oldItemId" placeholder="修改專用：原條碼">
-                    </div>
-                    <div class="form-group">
-                        <label style="width: 80px;">新條碼:</label>
-                        <input type="text" id="newItemId" placeholder="新增/修改：新條碼">
-                    </div>
-                    <div class="form-group">
-                        <label style="width: 80px;">物品名稱:</label>
-                        <input type="text" id="newItemName" placeholder="例如: 筆記型電腦">
-                    </div>
+                    <h2>📦 物品管理 (入庫 / 刪除 / 修改)</h2>
+                    <div class="form-group"><label style="width: 80px;">舊條碼:</label><input type="text" id="oldItemId" placeholder="修改專用：原條碼"></div>
+                    <div class="form-group"><label style="width: 80px;">新條碼:</label><input type="text" id="newItemId" placeholder="新增/修改：新條碼"></div>
+                    <div class="form-group"><label style="width: 80px;">物品名稱:</label><input type="text" id="newItemName" placeholder="例如: 筆記型電腦"></div>
                     <div class="form-group">
                         <label style="width: 80px;">入庫數量:</label>
                         <input type="number" id="newItemQty" value="1" min="1" style="width: 60px;">
@@ -254,19 +269,15 @@
                         <button class="btn-edit-act" onclick="uiEditItem()">✏️ 儲存修改</button>
                     </div>
                     <div id="itemFeedback" class="feedback"></div>
-                    
-                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="color: #7f8c8d; font-size: 12px; margin-top: 10px;">
+                        💡 修改說明：在「舊條碼」輸入原條碼，並輸入「新條碼」與「物品名稱」後點擊「✏️ 儲存修改」。
+                    </p>
 
-                    <h3 style="border-left-color: #f39c12;">⚠️ 安全庫存警示設定</h3>
-                    <div class="form-group"><label style="width: 80px;">警示品名:</label><input type="text" id="alertItemName" placeholder="例如: 筆記型電腦"></div>
-                    <div class="form-group"><label style="width: 80px;">最低數量:</label><input type="number" id="alertMinQty" value="1" min="0"><button class="btn-setting" style="margin-left:10px; background-color: #f39c12;" onclick="uiSetAlert()">設定</button></div>
-                    <div id="alertFeedback" class="feedback"></div>
-
-                    <h3>📜 目前設定清單</h3>
-                    <div class="scroll-container" style="max-height: 150px;">
+                    <h3 style="margin-top: 30px;">📋 物品庫存清單 (點擊刪除)</h3>
+                    <div class="scroll-container" style="max-height: 400px;">
                         <table>
-                            <thead><tr><th>警示品名</th><th>警戒數量</th><th>操作</th></tr></thead>
-                            <tbody id="alertList"></tbody>
+                            <thead><tr><th>物品條碼</th><th>物品名稱</th><th>目前狀態</th><th>操作</th></tr></thead>
+                            <tbody id="inventoryListAdmin"></tbody>
                         </table>
                     </div>
                 </div>
@@ -275,11 +286,66 @@
     </div>
 
     <script>
+        // === 待機模式邏輯 (30秒) ===
+        let idleTimer;
+        const IDLE_TIMEOUT = 30000; // 30秒
+
+        function resetIdleTimer() {
+            clearTimeout(idleTimer);
+            // 只要不是在螢幕保護程式狀態，就重新計算時間
+            if(document.getElementById('screensaver').style.display !== 'flex') {
+                idleTimer = setTimeout(showScreensaver, IDLE_TIMEOUT);
+            }
+        }
+
+        function showScreensaver() {
+            document.getElementById('screensaver').style.display = 'flex';
+            // 當進入待機，強制退回首頁導航
+            backToHome();
+        }
+
+        function wakeUp() {
+            document.getElementById('screensaver').style.display = 'none';
+            resetIdleTimer();
+        }
+
+        // 監聽所有滑鼠與鍵盤動作
+        window.onload = function() {
+            document.onmousemove = resetIdleTimer;
+            document.onkeypress = resetIdleTimer;
+            document.onclick = resetIdleTimer;
+            resetIdleTimer();
+        };
+
         // === 介面導航邏輯 ===
-        function enterSystem(tabId) {
+        const screenTitles = {
+            'tab-front': '🔄 快速借還作業',
+            'tab-inventory': '📋 庫存總表查詢',
+            'tab-admin': '⚙️ 系統後台設定'
+        };
+
+        function enterSystem(tabId, requirePwd = false) {
+            if(requirePwd) {
+                // 進入系統設定需要密碼
+                requireAdmin(function() {
+                    _doEnterSystem(tabId);
+                });
+            } else {
+                _doEnterSystem(tabId);
+            }
+        }
+
+        function _doEnterSystem(tabId) {
             document.getElementById('home-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'block';
-            switchTab(tabId);
+            
+            // 隱藏所有內容
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            // 只顯示選中的內容
+            document.getElementById(tabId).style.display = 'block';
+            document.getElementById('screenTitle').textContent = screenTitles[tabId];
+            
+            updateAllUI();
         }
 
         function backToHome() {
@@ -287,40 +353,60 @@
             document.getElementById('home-screen').style.display = 'flex';
         }
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            document.getElementById('btn-' + tabId).classList.add('active');
-            
-            // 切換分頁時重新計算並更新畫面 (確保逾期狀態即時)
-            updateAllUI();
-        }
-
-        // === 密碼驗證邏輯 ===
-        let pendingDeleteAction = null; // 暫存準備要執行的刪除動作
+        // === 密碼驗證邏輯 (包含強制更新功能) ===
+        let pendingAction = null; 
         
         function requireAdmin(actionCallback) {
-            pendingDeleteAction = actionCallback;
+            pendingAction = actionCallback;
             document.getElementById('passwordModal').style.display = 'flex';
             document.getElementById('adminPwd').value = '';
+            document.getElementById('newAdminPwd').value = '';
             document.getElementById('adminPwd').focus();
+
+            // 檢查是否需要強制變更密碼
+            if (system.isPasswordExpired()) {
+                document.getElementById('pwdPromptText').textContent = "請輸入『目前』密碼以驗證身分";
+                document.getElementById('pwdChangeArea').style.display = 'block';
+            } else {
+                document.getElementById('pwdPromptText').textContent = "請輸入管理者密碼以執行操作";
+                document.getElementById('pwdChangeArea').style.display = 'none';
+            }
         }
 
         function closeModal() {
             document.getElementById('passwordModal').style.display = 'none';
-            pendingDeleteAction = null;
+            pendingAction = null;
         }
 
         function verifyPassword() {
-            const pwd = document.getElementById('adminPwd').value;
-            if (pwd === 'admin123') { // 預設密碼
-                closeModal();
-                if (pendingDeleteAction) pendingDeleteAction();
-            } else {
+            const inputPwd = document.getElementById('adminPwd').value;
+            const currentPwd = system.getAdminPassword();
+
+            if (inputPwd !== currentPwd) {
                 alert('❌ 密碼錯誤，拒絕執行！');
                 document.getElementById('adminPwd').value = '';
+                return;
             }
+
+            // 如果是在過期狀態，要求輸入新密碼
+            if (system.isPasswordExpired()) {
+                const newPwd = document.getElementById('newAdminPwd').value;
+                if (!newPwd) {
+                    alert('❌ 您必須設定新密碼！');
+                    return;
+                }
+                if (newPwd === currentPwd) {
+                    alert('❌ 新密碼不可與舊密碼相同！');
+                    return;
+                }
+                // 更新密碼
+                system.updateAdminPassword(newPwd);
+                alert('✅ 密碼變更成功！請牢記新密碼。');
+            }
+
+            // 驗證通過 (或變更成功)，執行後續動作
+            closeModal();
+            if (pendingAction) pendingAction();
         }
 
         // === 系統核心邏輯 ===
@@ -341,7 +427,31 @@
                 this.alerts = new Map();
                 this.sheetUrl = localStorage.getItem('sys_sheet_url') || ""; 
                 this.rules = JSON.parse(localStorage.getItem('sys_rules')) || { maxDays: 7, penaltyMult: 2 };
+                
+                // 密碼管理初始化
+                if (!localStorage.getItem('sys_admin_pwd')) {
+                    localStorage.setItem('sys_admin_pwd', '217072');
+                    localStorage.setItem('sys_pwd_date', new Date().getTime());
+                }
+
                 this.loadData();
+            }
+
+            // 密碼相關方法
+            getAdminPassword() {
+                return localStorage.getItem('sys_admin_pwd');
+            }
+
+            updateAdminPassword(newPwd) {
+                localStorage.setItem('sys_admin_pwd', newPwd);
+                localStorage.setItem('sys_pwd_date', new Date().getTime());
+            }
+
+            isPasswordExpired() {
+                const pwdDate = parseInt(localStorage.getItem('sys_pwd_date') || '0');
+                const now = new Date().getTime();
+                const threeMonthsMs = 90 * 24 * 60 * 60 * 1000; // 90天換算成毫秒
+                return (now - pwdDate) >= threeMonthsMs;
             }
 
             saveData() {
@@ -419,6 +529,7 @@
                 });
                 const available = total - borrowed;
                 const alertQty = this.alerts.get(itemName) || 0;
+                
                 if (this.alerts.has(itemName) && available <= alertQty) {
                     return { isAlert: true, available: available, alertQty: alertQty };
                 }
@@ -536,7 +647,7 @@
                 const user = this.users.get(userId);
                 const item = this.items.get(itemId);
                 
-                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先至後台註冊！` };
+                if (!user) return { success: false, msg: `❌ 找不到人員編號: ${userId}，請先註冊！` };
                 
                 // 檢查停權狀態
                 if (user.banUntil) {
@@ -835,9 +946,14 @@
         }
 
         function updateInventoryUI() {
-            const list = document.getElementById('inventoryList');
+            const listReadOnly = document.getElementById('inventoryListReadOnly');
+            const listAdmin = document.getElementById('inventoryListAdmin');
             const summaryList = document.getElementById('inventorySummary');
-            list.innerHTML = ''; summaryList.innerHTML = '';
+            
+            if(listReadOnly) listReadOnly.innerHTML = ''; 
+            if(listAdmin) listAdmin.innerHTML = ''; 
+            summaryList.innerHTML = '';
+            
             const summaryData = {};
 
             system.items.forEach(item => {
@@ -857,17 +973,26 @@
                     borrowerText = user ? `${user.name} (${user.id})` : item.borrowerId;
                 }
                 
-                const deleteBtn = `<button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button>`;
-                
-                list.innerHTML += `
-                    <tr>
+                // 庫存總表的純檢視清單
+                if(listReadOnly) {
+                    listReadOnly.innerHTML += `<tr>
                         <td><strong>${item.id}</strong></td>
                         <td>${item.name}</td>
                         <td>${statusText}</td>
                         <td>${borrowerText}</td>
+                    </tr>`;
+                }
+
+                // 後台設定的刪除清單
+                if(listAdmin) {
+                    const deleteBtn = `<button class="btn-delete" onclick="uiDeleteItem('${item.id}')">刪除</button>`;
+                    listAdmin.innerHTML += `<tr>
+                        <td><strong>${item.id}</strong></td>
+                        <td>${item.name}</td>
+                        <td>${statusText}</td>
                         <td>${deleteBtn}</td>
-                    </tr>
-                `;
+                    </tr>`;
+                }
                 
                 if (!summaryData[item.name]) summaryData[item.name] = { total: 0, borrowed: 0 };
                 summaryData[item.name].total += 1;
